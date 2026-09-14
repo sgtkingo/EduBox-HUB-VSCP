@@ -1,7 +1,13 @@
-# Virtual Sensors Communication Protocol (VSCP)
+# EduBox HUB VSCP
 
-This repository contains version `2.0.0` of the Virtual Sensors Communication
-Protocol library. It provides both sides of the protocol: a synchronous request
+**EduBox HUB VSCP** (Virtual Sensors Communication Protocol) is the communication
+branch of the [EduBox HUB](https://github.com/sgtkingo/EduBox-HUB) ecosystem.
+It connects the HUB with [EduBox HUB App](https://github.com/sgtkingo/EduBox-HUB-App),
+[EduBox HUB Panel](https://github.com/sgtkingo/EduBox-HUB-Panel), emulators and
+compatible custom hardware.
+
+This repository contains version `2.0.0` of the protocol library. It provides
+both sides of the protocol: a synchronous request
 `Client` for an HMI/controller and a handler-based, non-blocking `Server` for a
 device or HUB. The current wire API version is `1.4`.
 
