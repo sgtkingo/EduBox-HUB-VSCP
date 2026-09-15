@@ -1,5 +1,7 @@
 # EduBox HUB VSCP
 
+![Logo EduBox HUB VSCP](assets/logo.svg)
+
 **EduBox HUB VSCP** (Virtual Sensors Communication Protocol) is the communication
 branch of the [EduBox HUB](https://github.com/sgtkingo/EduBox-HUB) ecosystem.
 It connects the HUB with [EduBox HUB App](https://github.com/sgtkingo/EduBox-HUB-App),

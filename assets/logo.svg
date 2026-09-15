@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title description">
+  <title id="title">EduBox HUB VSCP</title>
+  <desc id="description">Od senzoru až po aplikaci</desc>
+  <style>
+    .brand { font: 700 78px 'TT Norms Pro', Arial, sans-serif; letter-spacing: -2px; }
+    .product { font: 700 38px 'TT Norms Pro', Arial, sans-serif; letter-spacing: 5px; fill: #055DA9; }
+    .tagline { font: 400 26px 'TT Norms Pro', Arial, sans-serif; fill: #055DA9; }
+    .blue { fill: #055DA9; }
+    .orange { fill: #EB6209; }
+    .connector { fill: none; stroke: #055DA9; stroke-width: 20; stroke-linecap: square; }
+    .glyph { fill: none; stroke: #FFFFFF; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <g transform="translate(70 82)">
+    <path d="M78 0v34M78 122v34M0 78h34M122 78h34" class="connector"/>
+    <rect x="34" y="34" width="88" height="88" rx="18" class="blue"/>
+    <rect x="55" y="55" width="46" height="46" rx="8" class="orange"/>
+    <rect x="63" y="-12" width="30" height="24" rx="5" class="blue"/>
+    <rect x="63" y="144" width="30" height="24" rx="5" class="blue"/>
+    <rect x="-12" y="63" width="24" height="30" rx="5" class="blue"/>
+    <rect x="144" y="63" width="24" height="30" rx="5" class="blue"/>
+    <path d="M64 70h25M83 64l6 6-6 6M92 86H67M73 80l-6 6 6 6" class="glyph"/>
+  </g>
+  <text x="300" y="125" class="brand"><tspan fill="#055DA9">EduBox</tspan><tspan dx="22" fill="#EB6209">HUB</tspan></text>
+  <text x="304" y="190" class="product">VSCP</text>
+  <text x="304" y="236" class="tagline">Od senzoru až po aplikaci</text>
+</svg>
