@@ -16,8 +16,10 @@ public:
   static String buildRequest(Command command, const Parameters& parameters = Parameters());
   static String buildResponse(const Response& response);
 
-private:
+  // Parse fields without assuming request or response framing.
   static bool parseParameters(const String& message, Parameters& parameters, String& error);
+
+private:
   static String buildParameters(const Parameters& parameters);
 };
 

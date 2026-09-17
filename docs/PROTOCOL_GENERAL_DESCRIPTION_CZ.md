@@ -1,6 +1,6 @@
 # VSCP Protocol
 
-Aktuální API verze: `1.5`. Verze knihovny VSCP: `2.1.0`.
+Aktuální API verze: `1.5`. Verze knihovny VSCP: `2.1.1`.
 
 **VSCP** (*Virtual Sensors Communication Protocol*) je jednoduchý textový protokol pro výměnu zpráv mezi řídicí aplikací a cílovým zařízením. Protokol je navržený pro scénáře, kde je potřeba číst hodnoty senzorů, nastavovat akční členy, konfigurovat zařízení a potvrzovat připojení k fyzickým nebo logickým pinům.
 
@@ -118,7 +118,7 @@ Typické role zařízení:
 | `CONFIG` | `?type=CONFIG&id=<uid>&key=value...` | `?id=<uid>&status=1` | zápis konfiguračních parametrů |
 | `CONTROL` | `?type=CONTROL&id=<uid>&key=value...` | `?id=<uid>&status=1` | zápis runtime řídicích hodnot |
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | reset zařízení nebo jeho runtime stavu |
-| `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?type=PING&side=<server/client>&seq=<number>&status=1` | kontrola dostupnosti protistrany v obou směrech |
+| `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?side=<server/client>&seq=<number>&status=1` | kontrola dostupnosti protistrany v obou směrech |
 
 ## 7. INIT
 
@@ -467,14 +467,14 @@ Obě strany smějí zahájit ping, i současně.
 
 ```text
 Panel -> Board: ?type=PING&side=client&seq=42
-Board -> Panel: ?type=PING&side=server&seq=42&status=1
+Board -> Panel: ?side=server&seq=42&status=1
 
 Board -> Panel: ?type=PING&side=server&seq=17
-Panel -> Board: ?type=PING&side=client&seq=17&status=1
+Panel -> Board: ?side=client&seq=17&status=1
 ```
 
-Požadavek neobsahuje `status`. Platný požadavek dostane odpověď s `type=PING`,
-vlastním `side`, převzatým `seq` a `status=1`. Na zprávu obsahující `status`
+Požadavek obsahuje `type=PING` a neobsahuje `status`. Platný požadavek dostane
+odpověď bez `type`, s vlastním `side`, převzatým `seq` a `status=1`. Na zprávu obsahující `status`
 se znovu neodpovídá. Pořadí parametrů není významné.
 
 `seq` je desítkové celé číslo 1–4294967295 bez úvodních nul. Každý endpoint
@@ -486,7 +486,8 @@ endpointu; sekvence nejsou identifikátorem relace napříč restartem.
 
 Server má nejvýše jeden vlastní čekající ping na transport; více transportů
 je nezávislých. Příchozí pingy se obsluhují i během čekání na odpověď na běžný
-příkaz. Díky `type=PING` nemůže potvrzení pingu nahradit odpověď na `UPDATE`
+příkaz. Odpověď bez `type` obsahující `side`, `seq` a `status` se směruje do
+obsluhy PING před běžnými odpověďmi. Potvrzení pingu nemůže nahradit odpověď na `UPDATE`
 nebo jinou transakci. Ostatní příkazy zachovávají původní formát.
 
 Knihovna nabízí synchronní `Client::ping()`, idle obsluhu `Client::poll()`,

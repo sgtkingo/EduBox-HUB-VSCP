@@ -49,13 +49,19 @@ public:
   bool consume(Transport& transport, const String& message) {
     Request request;
     String error;
-    if (!Codec::parseRequest(message, request, error) || request.command != Command::Ping) return false;
+    if (!Codec::parseParameters(message, request.parameters, error)) return false;
+    const bool pingRequest = request.has("type") && commandFromName(request.value("type")) == Command::Ping;
+    const bool pingResponse = !request.has("type") && request.has("side") &&
+                              request.has("seq") && request.has("status");
+    if (!pingRequest && !pingResponse) return false;
+    // Old typed acknowledgements are consumed but cannot acknowledge a new PING.
+    if (pingRequest && request.has("status")) return true;
     expire();
     // Invalid PING frames are consumed silently; never answer a response.
     if (request.value("side") != remoteSide() || !validSequence(request.value("seq"))) return true;
     if (!request.has("status")) {
       Response response = Response::ok();
-      response.parameters = {{"type", "PING"}, {"side", localSide()}, {"seq", request.value("seq")}};
+      response.parameters = {{"side", localSide()}, {"seq", request.value("seq")}};
       transport.writeLine(Codec::buildResponse(response));
     } else if (request.value("status") == "1" && result_.state == PingState::Pending &&
                request.value("seq") == result_.sequence) {

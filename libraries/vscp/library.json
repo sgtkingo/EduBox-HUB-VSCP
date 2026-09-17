@@ -1,6 +1,6 @@
 {
   "name": "vscp",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Virtual Sensors Communication Protocol client/server library",
   "keywords": ["communication", "serial", "sensors", "actuators"],
   "frameworks": "*",

@@ -77,11 +77,11 @@ Client is always `side=client`; each Server endpoint is `side=server`.
 
 ```text
 ?type=PING&side=client&seq=42
-?type=PING&side=server&seq=42&status=1
+?side=server&seq=42&status=1
 ```
 
-Either side may initiate, including simultaneously. `status` distinguishes an
-acknowledgement from a request; acknowledgements are never answered. `seq` is a
+Either side may initiate, including simultaneously. Requests contain `type=PING`; acknowledgements contain `side`, `seq` and
+`status` without `type`. These fields route acknowledgements separately; acknowledgements are never answered. `seq` is a
 canonical decimal integer from 1 to 4294967295. Each endpoint generates its own
 sequence, advancing for every attempt and wrapping to 1. Only `status=1` from
 the opposite side with the pending sequence is accepted before the deadline.

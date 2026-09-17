@@ -8,7 +8,7 @@ It connects the HUB with [EduBox HUB App](https://github.com/sgtkingo/EduBox-HUB
 [EduBox HUB Panel](https://github.com/sgtkingo/EduBox-HUB-Panel), emulators and
 compatible custom hardware.
 
-This repository contains version `2.1.0` of the protocol library. It provides
+This repository contains version `2.1.1` of the protocol library. It provides
 both sides of the protocol: a synchronous request
 `Client` for an HMI/controller and a handler-based, non-blocking `Server` for a
 device or HUB. The current wire API version is `1.5`.

@@ -1,6 +1,6 @@
 # VSCP Protocol
 
-Current API version: `1.5`. VSCP library version: `2.1.0`.
+Current API version: `1.5`. VSCP library version: `2.1.1`.
 
 **VSCP** (*Virtual Sensors Communication Protocol*) is a simple text-based protocol for exchanging messages between a controller application and a target device. The protocol is designed for scenarios where sensor values need to be read, actuators need to be controlled, device parameters need to be configured, and connections to physical or logical pins need to be confirmed.
 
@@ -118,7 +118,7 @@ Typical device roles:
 | `CONFIG` | `?type=CONFIG&id=<uid>&key=value...` | `?id=<uid>&status=1` | writing configuration parameters |
 | `CONTROL` | `?type=CONTROL&id=<uid>&key=value...` | `?id=<uid>&status=1` | writing runtime control values |
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | resetting a device or its runtime state |
-| `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?type=PING&side=<server/client>&seq=<number>&status=1` | bidirectional peer liveness check |
+| `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?side=<server/client>&seq=<number>&status=1` | bidirectional peer liveness check |
 
 ## 7. INIT
 
@@ -466,14 +466,14 @@ the server sends `side=server`. Either side may initiate, including simultaneous
 
 ```text
 Client -> Server: ?type=PING&side=client&seq=42
-Server -> Client: ?type=PING&side=server&seq=42&status=1
+Server -> Client: ?side=server&seq=42&status=1
 
 Server -> Client: ?type=PING&side=server&seq=17
-Client -> Server: ?type=PING&side=client&seq=17&status=1
+Client -> Server: ?side=client&seq=17&status=1
 ```
 
-Requests have no `status`. Valid requests receive `type=PING`, the responder's
-`side`, the same `seq`, and `status=1`. Frames containing `status` are never
+Requests have `type=PING` and no `status`. Valid requests receive the responder's
+`side`, the same `seq`, and `status=1`, without `type`. Frames containing `status` are never
 answered. Parameter order is immaterial. `seq` is a canonical decimal integer
 from 1 to 4294967295, with no leading zeroes. Each endpoint advances its own
 counter per attempt and wraps to 1. Only a success from the opposite role with
@@ -483,7 +483,8 @@ Matching is scoped to an endpoint lifetime, not across restarts.
 
 The server allows one pending local ping per transport; transports are independent.
 Incoming requests are serviced even during ordinary client transactions.
-PING acknowledgements cannot satisfy other transactions; existing commands
+Untyped responses with `side`, `seq` and `status` are routed as PING acknowledgements
+before ordinary responses. They cannot satisfy other transactions; existing commands
 retain their original wire format.
 
 The API exposes synchronous `Client::ping()`, idle `Client::poll()`, non-blocking

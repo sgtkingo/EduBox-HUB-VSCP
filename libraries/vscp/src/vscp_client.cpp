@@ -84,7 +84,7 @@ ResponseStatus Client::ping() {
   const PingResult result = ping_.result();
   if (result.state == PingState::Ok) {
     response.status = Status::Ok;
-    response.parameters = {{"type", "PING"}, {"side", "server"}, {"seq", result.sequence}, {"status", "1"}};
+    response.parameters = {{"side", "server"}, {"seq", result.sequence}, {"status", "1"}};
   } else response.error = "Response timeout";
   return response;
 }
