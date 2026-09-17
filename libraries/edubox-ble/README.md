@@ -37,6 +37,9 @@ CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1, MYNEWT_VAL_BLE_SM_SC_ONLY=1,
 MYNEWT_VAL_BLE_SM_LEGACY=0. Runtime demands encryption, MITM authentication,
 bonding and a 16-byte encryption key. Stored identity is accepted only after
 authentication; BLE addresses alone are not an authentication mechanism.
+Bonded-only reconnect never enters a substitute PIN or accepts numeric-comparison
+pairing. A missing bond requires explicit manual commissioning with the Board PIN;
+automatic connections also verify the resolved identity against the saved peer.
 
 python libraries/edubox-ble/tests/run_tests.py runs framing and real VSCP-over-
 Channel integration at MTU 23. It does not test radio, NVS or physical outputs.

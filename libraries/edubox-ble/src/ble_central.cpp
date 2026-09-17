@@ -1,5 +1,6 @@
 #ifdef ARDUINO_ARCH_ESP32
 #include "ble_central.hpp"
+#include "ble_pairing_policy.hpp"
 #include <cstdio>
 
 namespace edubox { namespace ble {
@@ -26,7 +27,7 @@ void Central::scan() {
 }
 bool Central::select(size_t index, uint32_t pin) {
   std::lock_guard<std::mutex> lock(stateMutex_);
-  if (index >= snapshot_.count || pin > 999999) return false;
+  if (index >= snapshot_.count || !validCommissioningPin(pin)) return false;
   newRequest();
   channel_.disconnect();
   snapshot_.state = LinkState::Connecting; snapshot_.error[0] = 0;
@@ -42,7 +43,19 @@ bool Central::connectSaved() {
 }
 void Central::stop() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); newRequest(); snapshot_.state = LinkState::Idle; command_ = Command::Stop; }
 void Central::forget() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); newRequest(); snapshot_.state = LinkState::Idle; command_ = Command::Forget; }
-void Central::onPassKeyEntry(NimBLEConnInfo& info) { NimBLEDevice::injectPassKey(info, pairingPin_.load()); }
+void Central::onPassKeyEntry(NimBLEConnInfo& info) {
+  const uint32_t pin = pairingPin_.load();
+  if (!mayEnterPasskey(pin, pairingEpoch_.load(), requestEpoch_.load())) {
+    client_->disconnect(); return; // Lost bond / cancelled request: require manual commissioning.
+  }
+  NimBLEDevice::injectPassKey(info, pin);
+}
+void Central::onConfirmPasskey(NimBLEConnInfo& info, uint32_t) {
+  // This profile uses KEYBOARD_ONLY + Board DISPLAY_ONLY, not numeric comparison.
+  // Never inherit NimBLE's automatic confirmation of an unexpected association.
+  NimBLEDevice::injectConfirmPasskey(info, false);
+  client_->disconnect();
+}
 void Central::onDisconnect(NimBLEClient*, int) { channel_.disconnect(); disconnected_.store(true); }
 void Central::onAuthenticationComplete(NimBLEConnInfo& info) {
   if (!info.isEncrypted() || !info.isAuthenticated() || !info.isBonded() || info.getSecKeySize() != 16)
@@ -64,6 +77,10 @@ bool Central::connect(const Peer& peer, uint32_t pin, uint32_t epoch) {
   if (client_->isConnected()) {
     publish(LinkState::Error, "Previous peer disconnect pending"); return false;
   }
+  if (!pin && !NimBLEDevice::isBonded(NimBLEAddress(peer.address, peer.type))) {
+    publish(LinkState::Error, "Saved bond missing: Scan and pair manually"); return false;
+  }
+  pairingEpoch_.store(epoch);
   pairingPin_.store(pin);
   if (!client_->connect(NimBLEAddress(peer.address, peer.type), true)) {
     publish(LinkState::Error, "Board unavailable"); return false;
@@ -73,8 +90,12 @@ bool Central::connect(const Peer& peer, uint32_t pin, uint32_t epoch) {
   if (!client_->secureConnection()) { stopLink(); publish(LinkState::Error, "Pairing failed: check PIN / BOOT reset"); return false; }
   if (cancelled()) { stopLink(); return false; }
   const auto info = client_->getConnInfo();
+  const auto identity = info.getIdAddress();
   if (!info.isEncrypted() || !info.isAuthenticated() || !info.isBonded() || info.getSecKeySize() != 16) {
     stopLink(); publish(LinkState::Error, "Authenticated encryption required"); return false;
+  }
+  if (!acceptsPeerIdentity(pin, peer.address, peer.type, identity.toString().c_str(), identity.getType())) {
+    stopLink(); publish(LinkState::Error, "Bonded Board identity mismatch"); return false;
   }
   auto* service = client_->getService(ServiceUuid);
   if (!service) { stopLink(); publish(LinkState::Error, "Not an EduBox Board"); return false; }
@@ -201,6 +222,7 @@ void Central::run() {
         enabled_ = false; // Pairing/connect errors need explicit user action.
       }
       pairingPin_.store(0); pin = 0; // Retain PIN only for the pending pairing.
+      pairingEpoch_.store(0);
       disconnected_.store(false);
     }
     channel_.expire(millis());

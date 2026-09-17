@@ -1,5 +1,6 @@
 #include "ble_channel.hpp"
 #include "ble_transport.hpp"
+#include "ble_pairing_policy.hpp"
 #include <cassert>
 #include <iostream>
 #include <string>
@@ -13,6 +14,14 @@ void transfer(Channel& source, Channel& target, uint16_t mtu) {
   }
 }
 int main() {
+  assert(mayEnterPasskey(123456, 2, 2));
+  assert(!mayEnterPasskey(0, 2, 2)); // Automatic reconnect never supplies a new PIN.
+  assert(!mayEnterPasskey(99999, 2, 2) && !mayEnterPasskey(1000000, 2, 2));
+  assert(!mayEnterPasskey(123456, 2, 3) && !mayEnterPasskey(123456, 0, 0));
+  assert(acceptsPeerIdentity(0, "aa:bb:cc:dd:ee:ff", 0, "aa:bb:cc:dd:ee:ff", 0));
+  assert(!acceptsPeerIdentity(0, "aa:bb:cc:dd:ee:ff", 0, "00:00:00:00:00:01", 0));
+  assert(!acceptsPeerIdentity(0, "aa:bb:cc:dd:ee:ff", 0, "aa:bb:cc:dd:ee:ff", 1));
+  assert(acceptsPeerIdentity(123456, "RPA during commissioning", 1, "resolved bonded identity", 0));
   for (auto mtu : {23, 64, 247, 517}) {
     Channel a, b; assert(a.open() && b.open());
     std::string maximum(MaxLine, 'x');
@@ -49,5 +58,5 @@ int main() {
   Channel e; e.open(); transfer(c, e, 247);
   Transport receiver(e); vscp::String value;
   assert(receiver.readLine(value) == vscp::ReadStatus::Message && value == "?status=1");
-  std::cout << "PASS bounded BLE framing\n";
+  std::cout << "PASS bounded BLE framing and explicit pairing policy\n";
 }

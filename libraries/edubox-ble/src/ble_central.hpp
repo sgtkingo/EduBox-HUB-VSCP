@@ -27,6 +27,7 @@ class Central : private NimBLEClientCallbacks {
   Peer target_;
   uint32_t pin_ = 0;
   std::atomic<uint32_t> pairingPin_{0};
+  std::atomic<uint32_t> pairingEpoch_{0};
   std::atomic<bool> disconnected_{false};
   std::atomic<uint32_t> requestEpoch_{1};
   uint32_t enabledEpoch_ = 1;
@@ -39,6 +40,7 @@ class Central : private NimBLEClientCallbacks {
   bool enabled_ = false;
   uint32_t retryAt_ = 0, backoff_ = 1000;
   void onPassKeyEntry(NimBLEConnInfo&) override;
+  void onConfirmPasskey(NimBLEConnInfo&, uint32_t) override;
   void onDisconnect(NimBLEClient*, int) override;
   void onAuthenticationComplete(NimBLEConnInfo&) override;
   void run();
