@@ -12,7 +12,7 @@ int main() {
   Channel central, peripheral;
   assert(central.open() && peripheral.open());
   Transport outgoing(central), incoming(peripheral);
-  vscp::Client client(outgoing, 50); client.setSequenceEnabled(true);
+  vscp::Client client(outgoing, 1000); client.setSequenceEnabled(true);
   vscp::Server server; server.addTransport(incoming);
   std::atomic<bool> run{true}, holdResponse{false};
   std::atomic<int> controls{0};
@@ -39,9 +39,11 @@ int main() {
   assert(client.control("A02", {{"state", "1"}, {"speed", "50"}}).status == vscp::Status::Ok);
   assert(controls == 1);
   holdResponse = true;
+  client.setTimeout(500); // Windows scheduler may round short sleeps to 15 ms.
   assert(client.control("A02", {{"state", "0"}}).error == "Response timeout");
   assert(controls == 2); // Lost response DOES NOT retransmit CONTROL.
   holdResponse = false;
+  client.setTimeout(1000);
   auto response = client.update("A02");
   assert(response.status == vscp::Status::Ok && response.parameters.at("seq") == "5");
   assert(controls == 2); // Late same-UID seq=4 ignored.

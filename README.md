@@ -251,3 +251,16 @@ an error.
 For implementation-specific notes and upstream provenance, see
 [`libraries/vscp/README.md`](libraries/vscp/README.md) and
 [`libraries/vscp/UPSTREAM.md`](libraries/vscp/UPSTREAM.md).
+
+## API 1.6 revision / EduBox BLE bridge
+
+The wire API remains 1.6. Optional ordinary command `seq` is echoed by the
+server; clients can opt into strict matching. Legacy requests remain unchanged.
+`Client::closeSession()` and disconnect-aware `Transport::isAvailable()`
+support local invalidation without a wire BYE. See
+[`SEQ_1_6.md`](libraries/vscp/SEQ_1_6.md).
+
+The canonical, separate BLE library lives in
+[`libraries/edubox-ble`](libraries/edubox-ble/README.md), vendored by Board and Panel.
+It handles bounded fragmentation, secured GATT and discovery outside VSCP/GUI.
+Test it with `python libraries/edubox-ble/tests/run_tests.py`.

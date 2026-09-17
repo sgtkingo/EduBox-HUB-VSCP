@@ -5,7 +5,7 @@
 namespace edubox { namespace ble {
 bool Peripheral::begin(const char* name, bool forgetBond, uint32_t window) {
   if (!preferences_.begin("edubox-ble", false)) return false;
-  if (forgetBond) preferences_.clear();
+  if (forgetBond && !preferences_.clear()) return false;
   pin_ = preferences_.getUInt("pin", 0);
   if (pin_ < 100000 || pin_ > 999999) {
     pin_ = 100000 + esp_random() % 900000;
@@ -15,7 +15,7 @@ bool Peripheral::begin(const char* name, bool forgetBond, uint32_t window) {
   trustedType_ = preferences_.getUChar("type", 0);
   pairingUntil_ = millis() + window;
   if (!NimBLEDevice::init(name)) return false;
-  if (forgetBond) NimBLEDevice::deleteAllBonds();
+  if (forgetBond && !NimBLEDevice::deleteAllBonds()) return false;
   NimBLEDevice::setMTU(247);
   NimBLEDevice::setSecurityAuth(true, true, true);
   NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
@@ -145,10 +145,9 @@ bool Peripheral::poll() {
     NimBLEDevice::getAdvertising()->start();
   return channel_.takeLoss() || lost; // Also deliver faults detected by this poll immediately.
 }
-void Peripheral::forgetBond() {
+bool Peripheral::forgetBond() {
   channel_.disconnect();
-  preferences_.clear();
-  NimBLEDevice::deleteAllBonds();
+  return NimBLEDevice::deleteAllBonds() && preferences_.clear();
 }
 }}
 #endif

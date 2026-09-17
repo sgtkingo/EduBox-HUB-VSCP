@@ -121,13 +121,18 @@ void Central::run() {
     {
       std::lock_guard<std::mutex> lock(stateMutex_);
       command = command_; command_ = Command::None; target = target_; pin = pin_;
+      pin_ = 0;
     }
     if (command == Command::Stop || command == Command::Forget || command == Command::Scan ||
         command == Command::Connect || command == Command::Saved) {
       enabled_ = false; stopLink(); disconnected_.store(false);
     }
     if (command == Command::Forget) {
-      preferences_.clear(); NimBLEDevice::deleteAllBonds(); saved_ = Peer();
+      if (!NimBLEDevice::deleteAllBonds() || !preferences_.clear()) {
+        setState(LinkState::Error, "Unable to erase bond; retry locally");
+        vTaskDelay(pdMS_TO_TICKS(5)); continue;
+      }
+      saved_ = Peer();
       std::lock_guard<std::mutex> lock(stateMutex_); snapshot_.savedAddress[0] = 0;
     }
     if (command == Command::Stop || command == Command::Forget) setState(LinkState::Idle);
@@ -141,6 +146,8 @@ void Central::run() {
         auto& peer = found.peers[found.count++];
         copy(peer.address, advertised->getAddress().toString().c_str());
         copy(peer.name, advertised->getName().c_str());
+        for (auto& character : peer.name)
+          if (character && (uint8_t(character) < 32 || uint8_t(character) > 126)) character = '_';
         peer.type = advertised->getAddress().getType(); peer.rssi = advertised->getRSSI();
       }
       {
@@ -157,6 +164,7 @@ void Central::run() {
       if (!target.address[0] || !connect(target, pin)) {
         enabled_ = false; // Pairing/connect errors need explicit user action.
       }
+      pairingPin_.store(0); pin = 0; // Retain PIN only for the pending pairing.
       disconnected_.store(false);
     }
     channel_.expire(millis());
