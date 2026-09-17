@@ -28,6 +28,7 @@ Response Server::dispatch(Endpoint& endpoint, const Request& request) {
   Response response = handler->second(request);
   if (request.command == Command::Init) {
     endpoint.initialized = response.status == Status::Ok;
+    if (endpoint.initialized) endpoint.closed = false;
   }
   return response;
 }
@@ -41,12 +42,37 @@ void Server::process(Endpoint& endpoint, const String& message) {
     return;
   }
 
+  if (request.command == Command::Bye) {
+    if (request.value("side") == "client" && !request.has("status")) {
+      const bool notify = !endpoint.closed;
+      endpoint.initialized = false;
+      endpoint.closed = true;
+      endpoint.ping.cancel();
+      if (notify && byeHandler_) byeHandler_(*endpoint.transport);
+    }
+    return; // BYE is a notification, including before INIT. Never acknowledge it.
+  }
+
+  const bool wasClosed = endpoint.closed;
   Response response = dispatch(endpoint, request);
+  if (!wasClosed && endpoint.closed) return; // Handler sent BYE instead of an ordinary response.
   const String requestId = request.value("id");
   if (requestId.length() > 0 && response.parameters.find("id") == response.parameters.end()) {
     response.parameters["id"] = requestId;
   }
   endpoint.transport->writeLine(Codec::buildResponse(response));
+}
+
+bool Server::bye(Transport& transport) {
+  for (auto& endpoint : endpoints_) {
+    if (endpoint.transport != &transport) continue;
+    if (!transport.writeLine(Codec::buildRequest(Command::Bye, {{"side", "server"}}))) return false;
+    endpoint.initialized = false;
+    endpoint.closed = true;
+    endpoint.ping.cancel();
+    return true;
+  }
+  return false;
 }
 
 bool Server::ping(Transport& transport, unsigned long timeoutMs) {

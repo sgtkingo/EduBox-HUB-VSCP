@@ -22,6 +22,12 @@ Author: Generated for VSCP Protocol Testing
 """
 
 try:
+    from .vscp_session import API_VERSION, handle_session_command, ping_response, send_bye
+except ImportError:
+    from vscp_session import API_VERSION, handle_session_command, ping_response, send_bye
+
+
+try:
     import serial
 except ModuleNotFoundError:
     serial = None
@@ -52,7 +58,7 @@ class VSCPEmulator:
     
     def __init__(self, port='COM3', baudrate=115200, timeout=0.1):
         """Initialize the VSCP emulator"""
-        self.API_VERSION = "1.3"
+        self.API_VERSION = API_VERSION
         self.DB_VERSION = "1.0"
         self.APP_NAME = "VSCP Emulator"
         self.APP_VERSION = "1.0.0"
@@ -183,10 +189,18 @@ class VSCPEmulator:
             print(f"✗ Failed to connect to {self.port}: {e}")
             return False
     
+    def bye(self):
+        return send_bye(self)
+
     def disconnect_serial(self):
         """Disconnect from serial port"""
         if self.ser and self.ser.is_open:
-            self.ser.close()
+            try:
+                self.bye()
+            except Exception as error:
+                print(f"BYE write failed: {error}")
+            finally:
+                self.ser.close()
             print("✓ Serial connection closed")
     
     def parse_message(self, message: str) -> Dict[str, str]:
@@ -682,6 +696,9 @@ class VSCPEmulator:
         try:
             params = self.parse_message(message)
             request_type = params.get('type', '').upper()
+            control = handle_session_command(self, params)
+            if control is not None:
+                return control
 
             # Route to appropriate handler
             handlers = {
@@ -795,7 +812,7 @@ class VSCPEmulator:
         
         try:
             print("\n💡 Enhanced emulator ready! Realistic sensor data patterns active.")
-            print("   Example: ?type=INIT&app=board&db=1.0&api=1.3")
+            print("   Example: ?type=INIT&app=board&db=1.0&api=1.6")
             print("   Press Ctrl+C to stop\n")
             
             # Keep main thread alive and show simulation status

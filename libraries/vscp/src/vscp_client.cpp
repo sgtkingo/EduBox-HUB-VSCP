@@ -37,6 +37,7 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
       return result;
     }
 
+    if (consumeBye(message)) { result.error = "Peer disconnected"; return result; }
     if (ping_.consume(transport_, message)) continue;
 
     String parseError;
@@ -58,11 +59,32 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
   return result;
 }
 
+bool Client::consumeBye(const String& message) {
+  Request request;
+  String error;
+  if (!Codec::parseRequest(message, request, error) || request.command != Command::Bye ||
+      request.value("side") != "server" || request.has("status")) return false;
+  initialized_ = false;
+  closed_ = true;
+  ping_.cancel();
+  return true;
+}
+
+bool Client::bye() {
+  if (transacting_) return false;
+  if (!transport_.writeLine(Codec::buildRequest(Command::Bye, {{"side", "client"}}))) return false;
+  initialized_ = false;
+  closed_ = true;
+  ping_.cancel();
+  return true;
+}
+
 void Client::poll() {
   if (transacting_) return;
   ping_.expire();
   String message;
-  if (transport_.readLine(message) == ReadStatus::Message) ping_.consume(transport_, message);
+  if (transport_.readLine(message) == ReadStatus::Message && !consumeBye(message))
+    ping_.consume(transport_, message);
 }
 
 ResponseStatus Client::ping() {
@@ -77,7 +99,10 @@ ResponseStatus Client::ping() {
   while (ping_.result().state == PingState::Pending) {
     String message;
     const ReadStatus status = transport_.readLine(message);
-    if (status == ReadStatus::Message) ping_.consume(transport_, message);
+    if (status == ReadStatus::Message) {
+      if (consumeBye(message)) { response.error = "Peer disconnected"; return response; }
+      ping_.consume(transport_, message);
+    }
     else if (status == ReadStatus::MessageTooLong) { ping_.cancel(); response.error = "Response too long"; return response; }
     else detail::sleepMilliseconds(1);
   }
@@ -96,6 +121,7 @@ ResponseStatus Client::init(const String& application, const String& databaseVer
   if (detail::stringLength(databaseVersion) > 0) parameters["db"] = databaseVersion;
   ResponseStatus response = transact(Command::Init, parameters, false);
   initialized_ = response.status == Status::Ok;
+  if (initialized_) closed_ = false;
   return response;
 }
 

@@ -1,6 +1,6 @@
 # VSCP Protocol
 
-Aktuální API verze: `1.5`. Verze knihovny VSCP: `2.1.1`.
+Aktuální API verze: `1.6`. Verze knihovny VSCP: `2.2.2`.
 
 **VSCP** (*Virtual Sensors Communication Protocol*) je jednoduchý textový protokol pro výměnu zpráv mezi řídicí aplikací a cílovým zařízením. Protokol je navržený pro scénáře, kde je potřeba číst hodnoty senzorů, nastavovat akční členy, konfigurovat zařízení a potvrzovat připojení k fyzickým nebo logickým pinům.
 
@@ -119,6 +119,7 @@ Typické role zařízení:
 | `CONTROL` | `?type=CONTROL&id=<uid>&key=value...` | `?id=<uid>&status=1` | zápis runtime řídicích hodnot |
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | reset zařízení nebo jeho runtime stavu |
 | `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?side=<server/client>&seq=<number>&status=1` | kontrola dostupnosti protistrany v obou směrech |
+| `BYE` | `?type=BYE&side=<client/server>` | — | jednosměrné ukončení komunikační relace |
 
 ## 7. INIT
 
@@ -127,7 +128,7 @@ Typické role zařízení:
 Request:
 
 ```text
-?type=INIT&app=board&db=1.0&api=1.3
+?type=INIT&app=board&db=1.0&api=1.6
 ```
 
 Parametry:
@@ -332,7 +333,7 @@ Takové rozšíření by mělo být explicitně popsáno v aplikačním profilu.
 ### 14.1 Sensor example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.3
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=temp_sensor&pins=1
@@ -348,7 +349,7 @@ Device -> Controller: ?id=temp_sensor&status=1
 ### 14.2 Actuator example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.3
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=led_01&pins=3
@@ -364,7 +365,7 @@ Device -> Controller: ?id=led_01&status=1
 ### 14.3 Hybrid regulator example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.3
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=heater_01&pins=3,5,6
@@ -451,7 +452,7 @@ Minimální implementace VSCP by měla podporovat:
 Minimální příklad:
 
 ```text
-?type=INIT&api=1.3
+?type=INIT&api=1.6
 ?status=1
 
 ?type=UPDATE&id=temp_sensor
@@ -499,3 +500,24 @@ volají ze stejného kontextu. Polling vyžaduje neblokující transport.
 Interval pingů a reakce na výpadek jsou aplikační politika. Úspěšný ping
 potvrzuje komunikaci, nikoli funkčnost senzoru, platnost `INIT` nebo připojení
 pinů. Knihovna nezapíná periodické pingy ani automatické obnovení spojení.
+
+## 20. BYE — ukončení relace
+
+`BYE` je jednosměrné oznámení, že odesílatel ukončuje svou komunikační relaci.
+Klient posílá `?type=BYE&side=client`, server posílá `?type=BYE&side=server`.
+Na BYE se neposílá odpověď; zpráva nemá `status` ani nepotřebuje `seq`.
+Platí i před INIT. Odesílatel a příjemce zruší inicializaci relace a čekající
+PING. Příjem během klientské transakce okamžitě vrátí chybu `Peer disconnected`.
+Další běžné příkazy vyžadují nový úspěšný INIT; PING zůstává dostupný.
+
+U serveru se ukončí pouze relace konkrétního transportu. Ostatní transporty
+zůstanou aktivní. Piny ani stav fyzických zařízení se neuvolňují a transport
+se fyzicky nezavírá. Přijatá role musí být opačná; BYE se špatnou rolí nebo
+s `status` relaci neukončí. Opakované oznámení nemá další účinek.
+
+API: `Client::bye()` a `Server::bye(transport)` vracejí výsledek zápisu,
+nikoli potvrzení doručení. Při selhání zápisu se lokální relace nemění.
+`Client::sessionClosed()` dovoluje aplikaci zjistit ukončení relace.
+`Server::onBye(handler)` oznámí přijetí BYE a předá dotčený transport;
+duplicitní BYE nevyvolá další callback, dokud nový INIT neobnoví relaci.
+Zprávy v opačném směru jsou zpracovávány přes poll i během čekání klienta.

@@ -18,10 +18,14 @@ namespace vscp {
 class Server {
 public:
   using Handler = std::function<Response(const Request&)>;
+  using ByeHandler = std::function<void(Transport&)>;
 
   void addTransport(Transport& transport);
   void on(Command command, Handler handler);
   void poll();
+  bool bye(Transport& transport);
+  // Called once when a peer closes its session, with the affected transport.
+  void onBye(ByeHandler handler) { byeHandler_ = std::move(handler); }
   // Non-blocking; poll() routes acknowledgements and answers peer PINGs.
   bool ping(Transport& transport, unsigned long timeoutMs = DEFAULT_TIMEOUT_MS);
   PingResult pingResult(const Transport& transport) const;
@@ -31,12 +35,14 @@ private:
     explicit Endpoint(Transport& endpointTransport) : transport(&endpointTransport) {}
     Transport* transport;
     bool initialized = false;
+    bool closed = false;
     detail::PingExchange ping{true};
   };
 
   Response dispatch(Endpoint& endpoint, const Request& request);
   void process(Endpoint& endpoint, const String& message);
 
+  ByeHandler byeHandler_;
   std::vector<Endpoint> endpoints_;
   std::map<Command, Handler> handlers_;
 };

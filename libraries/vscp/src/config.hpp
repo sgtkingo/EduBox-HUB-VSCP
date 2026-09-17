@@ -10,7 +10,7 @@
 #pragma once
 
 #ifndef VSCP_API_VERSION
-#define VSCP_API_VERSION "1.5"
+#define VSCP_API_VERSION "1.6"
 #endif
 
 #ifndef MAX_PROTOCOL_REQUEST_SIZE

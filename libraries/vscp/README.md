@@ -1,6 +1,6 @@
 # VSCP client/server library
 
-The library implements **Virtual Sensors Communication Protocol** API `1.5`.
+The library implements **Virtual Sensors Communication Protocol** API `1.6`. Library version: `2.2.2`.
 It is not the event-based Very Simple Control Protocol.
 
 ## Components
@@ -123,3 +123,23 @@ Run desktop protocol and PING regression tests:
 ```sh
 python libraries/vscp/tests/run_tests.py
 ```
+
+## BYE session notification
+
+```text
+?type=BYE&side=client
+```
+
+The server may likewise send `side=server`. BYE has no reply, status or sequence.
+It works before INIT, closes only this transport's protocol session and cancels
+its PING. Hardware connections/pins and the physical transport are unchanged.
+Further normal requests need a new INIT; PING still works. Receiving BYE while
+waiting for a response immediately returns `Peer disconnected`.
+
+Use `client.bye()` or `server.bye(transport)` to send. The boolean result means
+write success, not confirmed delivery; failed writes leave local state intact.
+Use `client.sessionClosed()` to observe closure, or `server.onBye(handler)` to
+observe a remote BYE with the affected `Transport&`. The callback fires once
+per closed session and is rearmed by successful INIT. These methods share the
+same single-owner execution requirements as poll and other transactions.
+Wrong-role and status-bearing BYE messages do not close a session.

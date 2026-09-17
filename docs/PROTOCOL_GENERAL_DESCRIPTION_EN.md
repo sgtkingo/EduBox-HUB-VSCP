@@ -1,6 +1,6 @@
 # VSCP Protocol
 
-Current API version: `1.5`. VSCP library version: `2.1.1`.
+Current API version: `1.6`. VSCP library version: `2.2.2`.
 
 **VSCP** (*Virtual Sensors Communication Protocol*) is a simple text-based protocol for exchanging messages between a controller application and a target device. The protocol is designed for scenarios where sensor values need to be read, actuators need to be controlled, device parameters need to be configured, and connections to physical or logical pins need to be confirmed.
 
@@ -119,6 +119,7 @@ Typical device roles:
 | `CONTROL` | `?type=CONTROL&id=<uid>&key=value...` | `?id=<uid>&status=1` | writing runtime control values |
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | resetting a device or its runtime state |
 | `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?side=<server/client>&seq=<number>&status=1` | bidirectional peer liveness check |
+| `BYE` | `?type=BYE&side=<client/server>` | — | one-way communication session closure |
 
 ## 7. INIT
 
@@ -127,7 +128,7 @@ Typical device roles:
 Request:
 
 ```text
-?type=INIT&app=board&db=1.0&api=1.3
+?type=INIT&app=board&db=1.0&api=1.6
 ```
 
 Parameters:
@@ -332,7 +333,7 @@ Such an extension should be explicitly described in the application profile.
 ### 14.1 Sensor Example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.3
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=temp_sensor&pins=1
@@ -348,7 +349,7 @@ Device -> Controller: ?id=temp_sensor&status=1
 ### 14.2 Actuator Example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.3
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=led_01&pins=3
@@ -364,7 +365,7 @@ Device -> Controller: ?id=led_01&status=1
 ### 14.3 Hybrid Regulator Example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.3
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=heater_01&pins=3,5,6
@@ -451,7 +452,7 @@ A minimal VSCP implementation should support:
 Minimal example:
 
 ```text
-?type=INIT&api=1.3
+?type=INIT&api=1.6
 ?status=1
 
 ?type=UPDATE&id=temp_sensor
@@ -496,3 +497,24 @@ execution context. Polling requires non-blocking transport reads.
 Heartbeat intervals and failure policy belong to the application. Success does
 not imply working sensors, valid INIT or connected pins. No periodic heartbeat
 or automatic connection recovery is enabled by the library.
+
+## 20. BYE — session closure
+
+BYE is a one-way notification that the sender is closing its communication
+session: `?type=BYE&side=client` or `?type=BYE&side=server`. It receives no
+reply and has no status or sequence. It works before INIT. The sender and
+receiver invalidate the affected session's initialization and cancel its PING.
+A client transaction receiving BYE immediately fails with `Peer disconnected`.
+Normal commands require a new successful INIT; PING remains available.
+
+Only the affected server transport session closes. Other transports remain
+active. Device pins and hardware state are unchanged; the physical transport
+is not closed. Wrong-role BYE and frames containing status cannot close a
+session. Duplicate notifications are idempotent.
+
+`Client::bye()` and `Server::bye(transport)` return write success, not delivery
+confirmation. A failed write leaves the local session unchanged.
+`Client::sessionClosed()` exposes closure to the application.
+`Server::onBye(handler)` reports a received notification with its transport,
+once until a new successful INIT opens the session again. Incoming BYE is
+serviced by poll and while the client waits for responses.

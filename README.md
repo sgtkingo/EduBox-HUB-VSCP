@@ -8,10 +8,10 @@ It connects the HUB with [EduBox HUB App](https://github.com/sgtkingo/EduBox-HUB
 [EduBox HUB Panel](https://github.com/sgtkingo/EduBox-HUB-Panel), emulators and
 compatible custom hardware.
 
-This repository contains version `2.1.1` of the protocol library. It provides
+This repository contains version `2.2.2` of the protocol library. It provides
 both sides of the protocol: a synchronous request
 `Client` for an HMI/controller and a handler-based, non-blocking `Server` for a
-device or HUB. The current wire API version is `1.5`.
+device or HUB. The current wire API version is `1.6`.
 
 This project is not the event-based *Very Simple Control Protocol*.
 
@@ -237,7 +237,7 @@ compiler definitions:
 
 | Definition | Default | Meaning |
 | --- | --- | --- |
-| `VSCP_API_VERSION` | `"1.5"` | API version sent by `Client::init()` |
+| `VSCP_API_VERSION` | `"1.6" | API version sent by `Client::init()` |
 | `MAX_PROTOCOL_REQUEST_SIZE` | `1024` | Maximum protocol frame size |
 | `PROTOCOL_INIT_TIMEOUT` | `500` | Default client response timeout in milliseconds |
 | `PROTOCOL_VERBOSE` | `1` | Diagnostic verbosity |

@@ -18,6 +18,9 @@ public:
   // Call poll regularly while idle to answer server-initiated PING.
   void poll();
   ResponseStatus ping();
+  // One-way session close notification. No response is expected.
+  bool bye();
+  bool sessionClosed() const { return closed_; }
 
   ResponseStatus init(const String& application = "", const String& databaseVersion = "");
   ResponseStatus connect(const String& uid, const String& pins);
@@ -31,11 +34,13 @@ public:
   const char* apiVersion() const { return API_VERSION; }
 
 private:
+  bool consumeBye(const String& message);
   ResponseStatus transact(Command command, Parameters parameters, bool requiresInit, const String& expectedId = "");
 
   Transport& transport_;
   unsigned long timeoutMs_;
   bool initialized_ = false;
+  bool closed_ = false;
   bool transacting_ = false;
   detail::PingExchange ping_{false};
 };

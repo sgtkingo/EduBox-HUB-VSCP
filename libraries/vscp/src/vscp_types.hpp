@@ -27,7 +27,8 @@ enum class Command : uint8_t {
   Config,
   Control,
   Reset,
-  Ping
+  Ping,
+  Bye
 };
 
 enum class Status : uint8_t {

@@ -8,11 +8,19 @@ The wire format is a URL-like query string:
     ?type=UPDATE&id=S01
     ?id=S01&status=1&temp=24&humi=58
 
-Supported API 1.3 requests:
+Supported API 1.6 requests:
 INIT, UPDATE, CONFIG, CONTROL, RESET, CONNECT, DISCONNECT.
 """
 
 from __future__ import annotations
+
+
+try:
+    from .vscp_session import API_VERSION, handle_session_command, ping_response, send_bye
+except ImportError:
+    from vscp_session import API_VERSION, handle_session_command, ping_response, send_bye
+
+
 
 import json
 import importlib
@@ -30,7 +38,7 @@ except ModuleNotFoundError:
     serial = None
 
 
-PROTOCOL_API_VERSION = "1.5"
+PROTOCOL_API_VERSION = API_VERSION
 DEFAULT_DB_VERSION = "1.0"
 DEFAULT_APP_NAME = "board"
 
@@ -228,9 +236,17 @@ class VSCPEmulator:
             print(f"Failed to connect to {self.port}: {exc}")
             return False
 
+    def bye(self):
+        return send_bye(self)
+
     def disconnect_serial(self):
         if self.ser and self.ser.is_open:
-            self.ser.close()
+            try:
+                self.bye()
+            except Exception as error:
+                print(f"BYE write failed: {error}")
+            finally:
+                self.ser.close()
             print("Serial connection closed")
 
     def parse_message(self, message: str) -> Dict[str, str]:
@@ -482,6 +498,9 @@ class VSCPEmulator:
         try:
             params = self.parse_message(message)
             request_type = params.get("type", "").upper()
+            control = handle_session_command(self, params)
+            if control is not None:
+                return control
             handlers = {
                 "INIT": self.handle_init,
                 "UPDATE": self.handle_update,
@@ -573,7 +592,7 @@ class VSCPEmulator:
         listen_thread.start()
 
         try:
-            print("Emulator ready. Example: ?type=INIT&app=board&db=1.0&api=1.3")
+            print("Emulator ready. Example: ?type=INIT&app=board&db=1.0&api=1.6")
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
