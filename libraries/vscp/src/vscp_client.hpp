@@ -21,6 +21,11 @@ public:
   // One-way session close notification. No response is expected.
   bool bye();
   bool sessionClosed() const { return closed_; }
+  // Physical link loss: no write/BYE, cancel pending protocol state locally.
+  void closeSession();
+  // Opt-in API 1.6 revision: require matching echoed seq on ordinary responses.
+  // Enable before INIT only against a server that supports seq echo.
+  void setSequenceEnabled(bool enabled) { sequenceEnabled_ = enabled; }
 
   ResponseStatus init(const String& application = "", const String& databaseVersion = "");
   ResponseStatus connect(const String& uid, const String& pins);
@@ -42,6 +47,8 @@ private:
   bool initialized_ = false;
   bool closed_ = false;
   bool transacting_ = false;
+  bool sequenceEnabled_ = false;
+  uint32_t sequence_ = 0;
   detail::PingExchange ping_{false};
 };
 

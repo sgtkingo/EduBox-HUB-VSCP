@@ -4,6 +4,7 @@
  */
 
 #include "vscp_client.hpp"
+#include <cstdio>
 
 namespace vscp {
 
@@ -20,6 +21,14 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
     return result;
   }
 
+  String expectedSequence;
+  if (sequenceEnabled_) {
+    if (++sequence_ == 0) ++sequence_;
+    char buffer[11];
+    std::snprintf(buffer, sizeof(buffer), "%lu", static_cast<unsigned long>(sequence_));
+    expectedSequence = buffer;
+    parameters["seq"] = expectedSequence;
+  }
   if (!transport_.writeLine(Codec::buildRequest(command, parameters))) {
     result.error = "Request write failed";
     return result;
@@ -45,6 +54,13 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
       result.error = parseError;
       return result;
     }
+    if (sequenceEnabled_) {
+      const auto seq = result.parameters.find("seq");
+      if (seq == result.parameters.end() || seq->second != expectedSequence) {
+        result = ResponseStatus(); // Late/unsequenced response is not this transaction.
+        continue;
+      }
+    }
     if (detail::stringLength(expectedId) > 0) {
       const auto responseId = result.parameters.find("id");
       if (responseId == result.parameters.end() || responseId->second != expectedId) {
@@ -57,6 +73,12 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
 
   result.error = "Response timeout";
   return result;
+}
+
+void Client::closeSession() {
+  initialized_ = false;
+  closed_ = true;
+  ping_.cancel();
 }
 
 bool Client::consumeBye(const String& message) {

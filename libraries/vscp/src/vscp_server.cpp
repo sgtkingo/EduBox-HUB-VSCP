@@ -72,6 +72,8 @@ void Server::process(Endpoint& endpoint, const String& message) {
   Response response = dispatch(endpoint, request);
   if (!wasClosed && endpoint.closed) return; // Handler sent BYE instead of an ordinary response.
   const String requestId = request.value("id");
+  // Optional ordinary transaction correlation; no change for legacy requests.
+  if (request.has("seq")) response.parameters["seq"] = request.value("seq");
   if (requestId.length() > 0 && response.parameters.find("id") == response.parameters.end()) {
     response.parameters["id"] = requestId;
   }
