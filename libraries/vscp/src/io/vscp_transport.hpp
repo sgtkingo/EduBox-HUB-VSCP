@@ -20,6 +20,8 @@ class Transport {
 public:
   explicit Transport(LogSink* logSink = nullptr);
   virtual ~Transport() = default;
+  // Legacy streams are always available; disconnect-aware adapters override.
+  virtual bool isAvailable() const { return true; }
 
   ReadStatus readLine(String& message);
   bool writeLine(const String& message);

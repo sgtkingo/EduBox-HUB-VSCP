@@ -7,6 +7,7 @@ class Transport : public vscp::Transport {
   Channel& channel_;
 public:
   explicit Transport(Channel& channel) : channel_(channel) {}
+  bool isAvailable() const override { return channel_.online(); }
 protected:
   vscp::ReadStatus readLineImpl(vscp::String& message) override {
     Line line;

@@ -16,6 +16,7 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
   if (transacting_) { result.error = "Transaction already pending"; return result; }
   transacting_ = true;
   struct Guard { bool& busy; ~Guard() { busy = false; } } guard{transacting_};
+  if (!transport_.isAvailable()) { closeSession(); result.error = "Peer disconnected"; return result; }
   if (requiresInit && !initialized_) {
     result.error = "Protocol not initialized";
     return result;
@@ -35,6 +36,7 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
   }
   const unsigned long startedAt = detail::monotonicMilliseconds();
   while (detail::monotonicMilliseconds() - startedAt < timeoutMs_) {
+    if (!transport_.isAvailable()) { closeSession(); result.error = "Peer disconnected"; return result; }
     String message;
     const ReadStatus readStatus = transport_.readLine(message);
     if (readStatus == ReadStatus::NoData) {
@@ -103,6 +105,7 @@ bool Client::bye() {
 
 void Client::poll() {
   if (transacting_) return;
+  if (!transport_.isAvailable()) { closeSession(); return; }
   ping_.expire();
   String message;
   if (transport_.readLine(message) == ReadStatus::Message && !consumeBye(message))
@@ -119,6 +122,7 @@ ResponseStatus Client::ping() {
     return response;
   }
   while (ping_.result().state == PingState::Pending) {
+    if (!transport_.isAvailable()) { closeSession(); response.error = "Peer disconnected"; return response; }
     String message;
     const ReadStatus status = transport_.readLine(message);
     if (status == ReadStatus::Message) {

@@ -110,6 +110,7 @@ bool Peripheral::poll() {
     handle = handle_;
     if (lost) {
       status_->setValue("EDUBOX-BLE/1;ready=0");
+      authenticated_ = subscribed_ = false;
       waiting_ = false; disconnect = handle != BLE_HS_CONN_HANDLE_NONE;
     }
     if (!lost && authenticated_ && subscribed_ && !channel_.online()) {
@@ -123,7 +124,7 @@ bool Peripheral::poll() {
     }
     if (waiting_) {
       if (acknowledgement_ == BLE_HS_EDONE) { channel_.confirm(pending_); waiting_ = false; }
-      else if (acknowledgement_ || uint32_t(millis() - pendingAt_) >= FragmentTimeoutMs) {
+      else if (acknowledgement_ || uint32_t(millis() - pendingAt_) >= AckTimeoutMs) {
         channel_.fault(); waiting_ = false; disconnect = true;
       }
     }
@@ -131,11 +132,23 @@ bool Peripheral::poll() {
       waiting_ = send = true; acknowledgement_ = 0; pendingAt_ = millis();
     }
   }
-  if (disconnect) server_->disconnect(handle);
-  if (send && !tx_->indicate(pending_.data.data(), pending_.size, handle)) channel_.fault();
+  if (disconnect) {
+    { std::lock_guard<std::mutex> lock(stateMutex_); authenticated_ = subscribed_ = false; }
+    server_->disconnect(handle);
+  }
+  if (send && !tx_->indicate(pending_.data.data(), pending_.size, handle)) {
+    channel_.fault();
+    { std::lock_guard<std::mutex> lock(stateMutex_); authenticated_ = subscribed_ = false; }
+    server_->disconnect(handle);
+  }
   if (handle == BLE_HS_CONN_HANDLE_NONE && !NimBLEDevice::getAdvertising()->isAdvertising())
     NimBLEDevice::getAdvertising()->start();
-  return lost;
+  return channel_.takeLoss() || lost; // Also deliver faults detected by this poll immediately.
+}
+void Peripheral::forgetBond() {
+  channel_.disconnect();
+  preferences_.clear();
+  NimBLEDevice::deleteAllBonds();
 }
 }}
 #endif

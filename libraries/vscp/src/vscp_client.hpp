@@ -26,6 +26,7 @@ public:
   // Opt-in API 1.6 revision: require matching echoed seq on ordinary responses.
   // Enable before INIT only against a server that supports seq echo.
   void setSequenceEnabled(bool enabled) { sequenceEnabled_ = enabled; }
+  void setTimeout(unsigned long timeoutMs) { timeoutMs_ = timeoutMs; }
 
   ResponseStatus init(const String& application = "", const String& databaseVersion = "");
   ResponseStatus connect(const String& uid, const String& pins);

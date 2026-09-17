@@ -29,6 +29,12 @@ class StreamTransport : public Transport {
 public:
   explicit StreamTransport(Stream& stream, size_t maxMessageSize = MAX_MESSAGE_SIZE,
                            LogSink* logSink = nullptr);
+  // Main-owner only: forget partial framing and currently buffered physical RX.
+  void clearInput() {
+    buffer_ = ""; overflowed_ = false;
+    int remaining = stream_.available();
+    while (remaining-- > 0) stream_.read();
+  }
 
 protected:
   ReadStatus readLineImpl(String& message) override;

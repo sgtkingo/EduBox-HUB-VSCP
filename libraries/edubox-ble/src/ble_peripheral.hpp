@@ -37,6 +37,7 @@ public:
   uint32_t pairingPin() const { return pin_; } // Local commissioning console only.
   // Returns true once per loss/fault. Caller MUST clean VSCP/devices immediately.
   bool poll();
+  void forgetBond(); // Main-loop local physical commissioning only.
 };
 }}
 #endif

@@ -76,7 +76,7 @@ bool Central::connect(const Peer& peer, uint32_t pin) {
   const uint32_t start = millis();
   bool ready = false;
   while (client_->isConnected() && uint32_t(millis() - start) < 3000) {
-    if (status->readValue().compare("EDUBOX-BLE/1;ready=1") == 0 && channel_.online()) { ready = true; break; }
+    if (std::strcmp(status->readValue().c_str(), "EDUBOX-BLE/1;ready=1") == 0 && channel_.online()) { ready = true; break; }
     vTaskDelay(pdMS_TO_TICKS(10));
   }
   if (!ready) {

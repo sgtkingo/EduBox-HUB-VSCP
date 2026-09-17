@@ -8,7 +8,7 @@ namespace edubox { namespace ble {
 // Transport envelope v1. Each direction is strictly ordered, acknowledged ATT.
 // Header: EB,01, messageId LE16, offset LE16, total LE16. No newline on GATT.
 constexpr size_t MaxLine = 1024, QueueDepth = 4, HeaderSize = 8, MaxPacket = 244;
-constexpr uint32_t FragmentTimeoutMs = 2000;
+constexpr uint32_t FragmentTimeoutMs = 5000, AckTimeoutMs = 2000;
 constexpr const char* ServiceUuid = "ecb00001-8b65-4f41-9f17-6a672d8ad701";
 constexpr const char* RxUuid      = "ecb00002-8b65-4f41-9f17-6a672d8ad701";
 constexpr const char* TxUuid      = "ecb00003-8b65-4f41-9f17-6a672d8ad701";
