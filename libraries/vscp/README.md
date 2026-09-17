@@ -126,6 +126,14 @@ python libraries/vscp/tests/run_tests.py
 
 ## BYE session notification
 
+Servers may register a contextual handler with
+`server.on(command, [](const Request& request, Transport& source) { ... })`
+to implement application ownership policy per endpoint. Existing one-argument
+handlers remain supported. `server.closeSession(transport)` invalidates that
+endpoint and cancels its PING without sending a frame or invoking `onBye`.
+Use it for physical link loss; application hardware cleanup remains explicit.
+These additions do not change the API 1.6 wire format.
+
 ```text
 ?type=BYE&side=client
 ```

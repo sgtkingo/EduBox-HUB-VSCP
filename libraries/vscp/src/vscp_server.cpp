@@ -12,7 +12,22 @@ void Server::addTransport(Transport& transport) {
 }
 
 void Server::on(Command command, Handler handler) {
+  handlers_[command] = [handler](const Request& request, Transport&) { return handler(request); };
+}
+
+void Server::on(Command command, ContextHandler handler) {
   handlers_[command] = std::move(handler);
+}
+
+bool Server::closeSession(Transport& transport) {
+  for (auto& endpoint : endpoints_) {
+    if (endpoint.transport != &transport) continue;
+    endpoint.initialized = false;
+    endpoint.closed = true;
+    endpoint.ping.cancel();
+    return true;
+  }
+  return false;
 }
 
 Response Server::dispatch(Endpoint& endpoint, const Request& request) {
@@ -25,7 +40,7 @@ Response Server::dispatch(Endpoint& endpoint, const Request& request) {
     return Response::fail("Unknown type");
   }
 
-  Response response = handler->second(request);
+  Response response = handler->second(request, *endpoint.transport);
   if (request.command == Command::Init) {
     endpoint.initialized = response.status == Status::Ok;
     if (endpoint.initialized) endpoint.closed = false;

@@ -18,10 +18,15 @@ namespace vscp {
 class Server {
 public:
   using Handler = std::function<Response(const Request&)>;
+  using ContextHandler = std::function<Response(const Request&, Transport&)>;
   using ByeHandler = std::function<void(Transport&)>;
 
   void addTransport(Transport& transport);
   void on(Command command, Handler handler);
+  void on(Command command, ContextHandler handler);
+  // Invalidate only this endpoint without sending anything (physical link loss).
+  // Does not invoke onBye; application cleanup is the caller's responsibility.
+  bool closeSession(Transport& transport);
   void poll();
   bool bye(Transport& transport);
   // Called once when a peer closes its session, with the affected transport.
@@ -44,7 +49,7 @@ private:
 
   ByeHandler byeHandler_;
   std::vector<Endpoint> endpoints_;
-  std::map<Command, Handler> handlers_;
+  std::map<Command, ContextHandler> handlers_;
 };
 
 }  // namespace vscp
