@@ -33,6 +33,7 @@ Response Server::dispatch(Endpoint& endpoint, const Request& request) {
 }
 
 void Server::process(Endpoint& endpoint, const String& message) {
+  if (endpoint.ping.consume(*endpoint.transport, message)) return;
   Request request;
   String parseError;
   if (!Codec::parseRequest(message, request, parseError)) {
@@ -48,8 +49,23 @@ void Server::process(Endpoint& endpoint, const String& message) {
   endpoint.transport->writeLine(Codec::buildResponse(response));
 }
 
+bool Server::ping(Transport& transport, unsigned long timeoutMs) {
+  for (auto& endpoint : endpoints_) {
+    if (endpoint.transport == &transport) return endpoint.ping.start(transport, timeoutMs);
+  }
+  return false;
+}
+
+PingResult Server::pingResult(const Transport& transport) const {
+  for (const auto& endpoint : endpoints_) {
+    if (endpoint.transport == &transport) return endpoint.ping.result();
+  }
+  return PingResult();
+}
+
 void Server::poll() {
   for (auto& endpoint : endpoints_) {
+    endpoint.ping.expire();
     String message;
     const ReadStatus readStatus = endpoint.transport->readLine(message);
     if (readStatus == ReadStatus::MessageTooLong) {

@@ -7,6 +7,7 @@
 
 #include "io/vscp_transport.hpp"
 #include "vscp_codec.hpp"
+#include "vscp_ping.hpp"
 
 #include <functional>
 #include <map>
@@ -21,12 +22,16 @@ public:
   void addTransport(Transport& transport);
   void on(Command command, Handler handler);
   void poll();
+  // Non-blocking; poll() routes acknowledgements and answers peer PINGs.
+  bool ping(Transport& transport, unsigned long timeoutMs = DEFAULT_TIMEOUT_MS);
+  PingResult pingResult(const Transport& transport) const;
 
 private:
   struct Endpoint {
     explicit Endpoint(Transport& endpointTransport) : transport(&endpointTransport) {}
     Transport* transport;
     bool initialized = false;
+    detail::PingExchange ping{true};
   };
 
   Response dispatch(Endpoint& endpoint, const Request& request);

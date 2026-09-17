@@ -30,7 +30,7 @@ except ModuleNotFoundError:
     serial = None
 
 
-PROTOCOL_API_VERSION = "1.4"
+PROTOCOL_API_VERSION = "1.5"
 DEFAULT_DB_VERSION = "1.0"
 DEFAULT_APP_NAME = "board"
 

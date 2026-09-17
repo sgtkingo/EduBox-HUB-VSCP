@@ -22,7 +22,7 @@ public:
   virtual ~Transport() = default;
 
   ReadStatus readLine(String& message);
-  void writeLine(const String& message);
+  bool writeLine(const String& message);
   void setLogSink(LogSink* logSink) { logSink_ = logSink; }
 
 protected:

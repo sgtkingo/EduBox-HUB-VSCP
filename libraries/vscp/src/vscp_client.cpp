@@ -12,12 +12,18 @@ Client::Client(Transport& transport, unsigned long timeoutMs)
 
 ResponseStatus Client::transact(Command command, Parameters parameters, bool requiresInit, const String& expectedId) {
   ResponseStatus result;
+  if (transacting_) { result.error = "Transaction already pending"; return result; }
+  transacting_ = true;
+  struct Guard { bool& busy; ~Guard() { busy = false; } } guard{transacting_};
   if (requiresInit && !initialized_) {
     result.error = "Protocol not initialized";
     return result;
   }
 
-  transport_.writeLine(Codec::buildRequest(command, parameters));
+  if (!transport_.writeLine(Codec::buildRequest(command, parameters))) {
+    result.error = "Request write failed";
+    return result;
+  }
   const unsigned long startedAt = detail::monotonicMilliseconds();
   while (detail::monotonicMilliseconds() - startedAt < timeoutMs_) {
     String message;
@@ -30,6 +36,8 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
       result.error = "Response too long";
       return result;
     }
+
+    if (ping_.consume(transport_, message)) continue;
 
     String parseError;
     if (!Codec::parseResponse(message, result, parseError)) {
@@ -48,6 +56,37 @@ ResponseStatus Client::transact(Command command, Parameters parameters, bool req
 
   result.error = "Response timeout";
   return result;
+}
+
+void Client::poll() {
+  if (transacting_) return;
+  ping_.expire();
+  String message;
+  if (transport_.readLine(message) == ReadStatus::Message) ping_.consume(transport_, message);
+}
+
+ResponseStatus Client::ping() {
+  ResponseStatus response;
+  if (transacting_) { response.error = "Transaction already pending"; return response; }
+  transacting_ = true;
+  struct Guard { bool& busy; ~Guard() { busy = false; } } guard{transacting_};
+  if (!ping_.start(transport_, timeoutMs_)) {
+    response.error = "PING write failed";
+    return response;
+  }
+  while (ping_.result().state == PingState::Pending) {
+    String message;
+    const ReadStatus status = transport_.readLine(message);
+    if (status == ReadStatus::Message) ping_.consume(transport_, message);
+    else if (status == ReadStatus::MessageTooLong) { ping_.cancel(); response.error = "Response too long"; return response; }
+    else detail::sleepMilliseconds(1);
+  }
+  const PingResult result = ping_.result();
+  if (result.state == PingState::Ok) {
+    response.status = Status::Ok;
+    response.parameters = {{"type", "PING"}, {"side", "server"}, {"seq", result.sequence}, {"status", "1"}};
+  } else response.error = "Response timeout";
+  return response;
 }
 
 ResponseStatus Client::init(const String& application, const String& databaseVersion) {

@@ -1,6 +1,6 @@
 # VSCP client/server library
 
-The library implements **Virtual Sensors Communication Protocol** API `1.4`.
+The library implements **Virtual Sensors Communication Protocol** API `1.5`.
 It is not the event-based Very Simple Control Protocol.
 
 ## Components
@@ -69,3 +69,57 @@ Before dispatch, the common transport removes bytes outside printable ASCII
 (`32..126`) and trims surrounding whitespace on both RX and TX. The Arduino
 stream adapter also emits a separator newline and flushes each complete frame,
 matching the framing behavior of the original UART messenger.
+
+## Bidirectional PING
+
+PING checks peer communication without INIT, device handlers, or pin changes.
+Client is always `side=client`; each Server endpoint is `side=server`.
+
+```text
+?type=PING&side=client&seq=42
+?type=PING&side=server&seq=42&status=1
+```
+
+Either side may initiate, including simultaneously. `status` distinguishes an
+acknowledgement from a request; acknowledgements are never answered. `seq` is a
+canonical decimal integer from 1 to 4294967295. Each endpoint generates its own
+sequence, advancing for every attempt and wrapping to 1. Only `status=1` from
+the opposite side with the pending sequence is accepted before the deadline.
+Invalid PING fields, unsolicited, duplicate and late replies are ignored.
+Parameter order is immaterial; existing commands retain their wire format.
+Sequence matching applies within an endpoint lifetime, not across restarts.
+
+```cpp
+// Client: synchronous, uses the constructor's timeout, does not initialize.
+auto result = client.ping();
+// Client main loop: answer incoming server PING while otherwise idle.
+client.poll();
+
+// Server: non-blocking, transport must already be registered.
+bool started = server.ping(transport, 1000);
+server.poll();
+auto progress = server.pingResult(transport);
+// progress.state: Idle, Pending, Ok, Timeout, WriteError
+// progress.sequence: local request sequence
+```
+
+A second server PING on the same transport is rejected while one is pending;
+different transports have independent exchanges. Unknown transports cannot be
+pinged. Client transactions service incoming PINGs while waiting for ordinary
+responses. PING acknowledgements never satisfy an ordinary transaction.
+
+Only one owner may read a transport. Call `poll()` and transactions from the
+same execution context; these objects are not thread-safe. Client `poll()` is
+for idle use and consumes one incoming frame; unrelated idle frames are discarded.
+A transport must provide non-blocking reads for polling and bounded timeouts;
+blocking desktop stream adapters require an appropriately managed input loop.
+`Transport::writeLine()` now returns a success boolean; callers may still ignore it.
+
+No periodic heartbeat or automatic recovery is enabled by the library.
+A successful PING does not restore INIT, device connections or Panel watchdog state.
+
+Run desktop protocol and PING regression tests:
+
+```sh
+python libraries/vscp/tests/run_tests.py
+```

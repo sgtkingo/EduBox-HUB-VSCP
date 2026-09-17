@@ -21,15 +21,17 @@ ReadStatus Transport::readLine(String& message) {
   return status;
 }
 
-void Transport::writeLine(const String& message) {
+bool Transport::writeLine(const String& message) {
   const String cleanMessage = detail::stripMessage(message);
   if (detail::stringLength(cleanMessage) == 0) {
     logError("Refusing to write an empty protocol message");
-    return;
+    return false;
   }
 
   logTrace("TX", cleanMessage);
-  if (!writeLineImpl(cleanMessage)) logError("Unable to write protocol message");
+  const bool written = writeLineImpl(cleanMessage);
+  if (!written) logError("Unable to write protocol message");
+  return written;
 }
 
 void Transport::logTrace(const char* direction, const String& message) {

@@ -7,12 +7,17 @@
 
 #include "io/vscp_transport.hpp"
 #include "vscp_codec.hpp"
+#include "vscp_ping.hpp"
 
 namespace vscp {
 
 class Client {
 public:
   explicit Client(Transport& transport, unsigned long timeoutMs = DEFAULT_TIMEOUT_MS);
+
+  // Call poll regularly while idle to answer server-initiated PING.
+  void poll();
+  ResponseStatus ping();
 
   ResponseStatus init(const String& application = "", const String& databaseVersion = "");
   ResponseStatus connect(const String& uid, const String& pins);
@@ -31,6 +36,8 @@ private:
   Transport& transport_;
   unsigned long timeoutMs_;
   bool initialized_ = false;
+  bool transacting_ = false;
+  detail::PingExchange ping_{false};
 };
 
 }  // namespace vscp

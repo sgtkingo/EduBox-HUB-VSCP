@@ -26,12 +26,20 @@ enum class Command : uint8_t {
   Update,
   Config,
   Control,
-  Reset
+  Reset,
+  Ping
 };
 
 enum class Status : uint8_t {
   Error = 0,
   Ok = 1
+};
+
+enum class PingState : uint8_t { Idle, Pending, Ok, Timeout, WriteError };
+
+struct PingResult {
+  PingState state = PingState::Idle;
+  String sequence;
 };
 
 struct Request {
