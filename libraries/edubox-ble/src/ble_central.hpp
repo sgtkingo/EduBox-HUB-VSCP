@@ -28,6 +28,9 @@ class Central : private NimBLEClientCallbacks {
   uint32_t pin_ = 0;
   std::atomic<uint32_t> pairingPin_{0};
   std::atomic<bool> disconnected_{false};
+  std::atomic<uint32_t> requestEpoch_{1};
+  uint32_t enabledEpoch_ = 1;
+  void newRequest() { if (++requestEpoch_ == 0) ++requestEpoch_; }
   NimBLEClient* client_ = nullptr;
   NimBLERemoteCharacteristic* rx_ = nullptr;
   TaskHandle_t worker_ = nullptr;
@@ -39,8 +42,8 @@ class Central : private NimBLEClientCallbacks {
   void onDisconnect(NimBLEClient*, int) override;
   void onAuthenticationComplete(NimBLEConnInfo&) override;
   void run();
-  bool connect(const Peer&, uint32_t pin);
-  void setState(LinkState, const char* error = "");
+  bool connect(const Peer&, uint32_t pin, uint32_t epoch);
+  void setState(LinkState, const char* error = "", uint32_t epoch = 0);
   void stopLink();
   static void task(void* self) { static_cast<Central*>(self)->run(); }
 public:

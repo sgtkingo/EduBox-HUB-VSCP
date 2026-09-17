@@ -12,19 +12,22 @@ bool Central::begin() {
   if (worker_) return true;
   return xTaskCreatePinnedToCore(task, "edubox-ble", 8192, this, 1, &worker_, 0) == pdPASS;
 }
-void Central::setState(LinkState state, const char* error) {
+void Central::setState(LinkState state, const char* error, uint32_t epoch) {
   std::lock_guard<std::mutex> lock(stateMutex_);
+  if (epoch && epoch != requestEpoch_.load()) return;
   snapshot_.state = state; copy(snapshot_.error, error);
 }
 void Central::scan() {
   channel_.disconnect();
   std::lock_guard<std::mutex> lock(stateMutex_);
+  newRequest();
   snapshot_.state = LinkState::Scanning; snapshot_.error[0] = 0;
   command_ = Command::Scan;
 }
 bool Central::select(size_t index, uint32_t pin) {
   std::lock_guard<std::mutex> lock(stateMutex_);
   if (index >= snapshot_.count || pin > 999999) return false;
+  newRequest();
   channel_.disconnect();
   snapshot_.state = LinkState::Connecting; snapshot_.error[0] = 0;
   target_ = snapshot_.peers[index]; pin_ = pin; command_ = Command::Connect; return true;
@@ -32,12 +35,13 @@ bool Central::select(size_t index, uint32_t pin) {
 bool Central::connectSaved() {
   std::lock_guard<std::mutex> lock(stateMutex_);
   if (!snapshot_.savedAddress[0]) return false;
+  newRequest();
   channel_.disconnect();
   snapshot_.state = LinkState::Connecting; snapshot_.error[0] = 0;
-  command_ = Command::Saved; return true;
+  target_ = saved_; command_ = Command::Saved; return true;
 }
-void Central::stop() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); snapshot_.state = LinkState::Idle; command_ = Command::Stop; }
-void Central::forget() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); snapshot_.state = LinkState::Idle; command_ = Command::Forget; }
+void Central::stop() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); newRequest(); snapshot_.state = LinkState::Idle; command_ = Command::Stop; }
+void Central::forget() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); newRequest(); snapshot_.state = LinkState::Idle; command_ = Command::Forget; }
 void Central::onPassKeyEntry(NimBLEConnInfo& info) { NimBLEDevice::injectPassKey(info, pairingPin_.load()); }
 void Central::onDisconnect(NimBLEClient*, int) { channel_.disconnect(); disconnected_.store(true); }
 void Central::onAuthenticationComplete(NimBLEConnInfo& info) {
@@ -52,34 +56,39 @@ void Central::stopLink() {
   while (client_->isConnected() && uint32_t(millis() - started) < 2500)
     vTaskDelay(pdMS_TO_TICKS(10)); // Worker only; never proceed on the previous peer.
 }
-bool Central::connect(const Peer& peer, uint32_t pin) {
-  setState(LinkState::Connecting);
+bool Central::connect(const Peer& peer, uint32_t pin, uint32_t epoch) {
+  auto publish = [this, epoch](LinkState state, const char* error = "") { setState(state, error, epoch); };
+  auto cancelled = [this, epoch] { return epoch != requestEpoch_.load(); };
+  if (cancelled()) return false;
+  publish(LinkState::Connecting);
   if (client_->isConnected()) {
-    setState(LinkState::Error, "Previous peer disconnect pending"); return false;
+    publish(LinkState::Error, "Previous peer disconnect pending"); return false;
   }
   pairingPin_.store(pin);
   if (!client_->connect(NimBLEAddress(peer.address, peer.type), true)) {
-    setState(LinkState::Error, "Board unavailable"); return false;
+    publish(LinkState::Error, "Board unavailable"); return false;
   }
-  setState(LinkState::Securing);
-  if (!client_->secureConnection()) { stopLink(); setState(LinkState::Error, "Pairing failed: check PIN / BOOT reset"); return false; }
+  if (cancelled()) { stopLink(); return false; }
+  publish(LinkState::Securing);
+  if (!client_->secureConnection()) { stopLink(); publish(LinkState::Error, "Pairing failed: check PIN / BOOT reset"); return false; }
+  if (cancelled()) { stopLink(); return false; }
   const auto info = client_->getConnInfo();
   if (!info.isEncrypted() || !info.isAuthenticated() || !info.isBonded() || info.getSecKeySize() != 16) {
-    stopLink(); setState(LinkState::Error, "Authenticated encryption required"); return false;
+    stopLink(); publish(LinkState::Error, "Authenticated encryption required"); return false;
   }
   auto* service = client_->getService(ServiceUuid);
-  if (!service) { stopLink(); setState(LinkState::Error, "Not an EduBox Board"); return false; }
+  if (!service) { stopLink(); publish(LinkState::Error, "Not an EduBox Board"); return false; }
   auto* tx = service->getCharacteristic(TxUuid);
   auto* status = service->getCharacteristic(StatusUuid);
   rx_ = service->getCharacteristic(RxUuid);
   if (!rx_ || !rx_->canWrite() || !tx || !tx->canIndicate() || !status || !status->canRead()) {
-    stopLink(); setState(LinkState::Error, "Incompatible BLE service"); return false;
+    stopLink(); publish(LinkState::Error, "Incompatible BLE service"); return false;
   }
   // Main loop must invalidate preceding VSCP session before reopening Channel.
   const uint32_t cleanupAt = millis();
   while (!channel_.open()) {
-    if (!client_->isConnected() || uint32_t(millis() - cleanupAt) >= 3000) {
-      stopLink(); setState(LinkState::Error, "Session cleanup timeout"); return false;
+    if (cancelled() || !client_->isConnected() || uint32_t(millis() - cleanupAt) >= 3000) {
+      stopLink(); publish(LinkState::Error, "Session cleanup timeout"); return false;
     }
     vTaskDelay(pdMS_TO_TICKS(10));
   }
@@ -87,29 +96,36 @@ bool Central::connect(const Peer& peer, uint32_t pin) {
   if (!tx->subscribe(false, [this, generation](NimBLERemoteCharacteristic*, uint8_t* data, size_t size, bool notify) {
         if (!notify) channel_.receive(data, size, generation, millis());
       }, true)) {
-    channel_.fault(); stopLink(); setState(LinkState::Error, "Indication subscription failed"); return false;
+    channel_.fault(); stopLink(); publish(LinkState::Error, "Indication subscription failed"); return false;
   }
   const uint32_t start = millis();
   bool ready = false;
-  while (client_->isConnected() && uint32_t(millis() - start) < 3000) {
+  while (!cancelled() && client_->isConnected() && uint32_t(millis() - start) < 3000) {
     if (std::strcmp(status->readValue().c_str(), "EDUBOX-BLE/1;ready=1") == 0 && channel_.online()) { ready = true; break; }
     vTaskDelay(pdMS_TO_TICKS(10));
   }
-  if (!ready) {
-    channel_.fault(); stopLink(); setState(LinkState::Error, "Session cleanup / readiness timeout"); return false;
+  if (!ready || cancelled()) {
+    channel_.fault(); stopLink(); publish(LinkState::Error, "Session cleanup / readiness timeout"); return false;
   }
   // Persist only an authenticated identity, never the entered PIN.
   const auto id = info.getIdAddress();
-  if (!preferences_.putUChar("type", id.getType()) || !preferences_.putString("peer", id.toString().c_str())) {
-    channel_.fault(); stopLink(); setState(LinkState::Error, "Unable to save bonded peer"); return false;
-  }
-  saved_ = peer; copy(saved_.address, id.toString().c_str()); saved_.type = id.getType();
+  bool saved = false;
   {
     std::lock_guard<std::mutex> lock(stateMutex_);
-    copy(snapshot_.savedAddress, saved_.address); snapshot_.mtu = client_->getMTU();
+    if (epoch == requestEpoch_.load()) {
+      saved = preferences_.putUChar("type", id.getType()) && preferences_.putString("peer", id.toString().c_str());
+      if (saved) {
+        saved_ = peer; copy(saved_.address, id.toString().c_str()); saved_.type = id.getType();
+        copy(snapshot_.savedAddress, saved_.address); snapshot_.mtu = client_->getMTU();
+      }
+    }
+  }
+  if (!saved) {
+    channel_.fault(); stopLink(); publish(LinkState::Error, "Unable to save bonded peer / cancelled"); return false;
   }
   backoff_ = 1000;
-  setState(LinkState::Ready);
+  if (cancelled()) { stopLink(); return false; }
+  publish(LinkState::Ready);
   return true;
 }
 void Central::run() {
@@ -133,10 +149,11 @@ void Central::run() {
   scanner->setActiveScan(true); scanner->setMaxResults(32);
   setState(LinkState::Idle);
   for (;;) {
-    Command command; Peer target; uint32_t pin;
+    Command command; Peer target; uint32_t pin, epoch;
     {
       std::lock_guard<std::mutex> lock(stateMutex_);
       command = command_; command_ = Command::None; target = target_; pin = pin_;
+      epoch = requestEpoch_.load();
       pin_ = 0;
     }
     if (command == Command::Stop || command == Command::Forget || command == Command::Scan ||
@@ -145,15 +162,15 @@ void Central::run() {
     }
     if (command == Command::Forget) {
       if (!NimBLEDevice::deleteAllBonds() || !preferences_.clear()) {
-        setState(LinkState::Error, "Unable to erase bond; retry locally");
+        setState(LinkState::Error, "Unable to erase bond; retry locally", epoch);
         vTaskDelay(pdMS_TO_TICKS(5)); continue;
       }
-      saved_ = Peer();
-      std::lock_guard<std::mutex> lock(stateMutex_); snapshot_.savedAddress[0] = 0;
+      std::lock_guard<std::mutex> lock(stateMutex_);
+      saved_ = Peer(); snapshot_.savedAddress[0] = 0;
     }
-    if (command == Command::Stop || command == Command::Forget) setState(LinkState::Idle);
+    if (command == Command::Stop || command == Command::Forget) setState(LinkState::Idle, "", epoch);
     if (command == Command::Scan) {
-      setState(LinkState::Scanning);
+      setState(LinkState::Scanning, "", epoch);
       const auto results = scanner->getResults(5000);
       Snapshot found; found.state = LinkState::Idle;
       for (int i = 0; i < results.getCount() && found.count < found.peers.size(); ++i) {
@@ -168,31 +185,35 @@ void Central::run() {
       }
       {
         std::lock_guard<std::mutex> lock(stateMutex_);
-        snapshot_.peers = found.peers; snapshot_.count = found.count;
-        snapshot_.state = LinkState::Idle;
-        copy(snapshot_.error, found.count ? "" : "No Board found (pairing window / range)");
+        if (epoch == requestEpoch_.load()) {
+          snapshot_.peers = found.peers; snapshot_.count = found.count;
+          snapshot_.state = LinkState::Idle;
+          copy(snapshot_.error, found.count ? "" : "No Board found (pairing window / range)");
+        }
       }
       scanner->clearResults();
     }
     if (command == Command::Connect || command == Command::Saved) {
-      if (command == Command::Saved) { target = saved_; pin = 0; }
+      if (command == Command::Saved) pin = 0; // Target captured when the user requested it.
       enabled_ = true;
-      if (!target.address[0] || !connect(target, pin)) {
+      enabledEpoch_ = epoch;
+      if (!target.address[0] || !connect(target, pin, epoch) || epoch != requestEpoch_.load()) {
         enabled_ = false; // Pairing/connect errors need explicit user action.
       }
       pairingPin_.store(0); pin = 0; // Retain PIN only for the pending pairing.
       disconnected_.store(false);
     }
     channel_.expire(millis());
+    if (enabled_ && enabledEpoch_ != requestEpoch_.load()) { enabled_ = false; stopLink(); }
     if (disconnected_.exchange(false) || (enabled_ && client_->isConnected() && !channel_.online())) {
       stopLink(); retryAt_ = millis() + backoff_;
       backoff_ = backoff_ < 8000 ? backoff_ * 2 : 8000;
-      if (enabled_) setState(LinkState::Retry, "Link lost; VSCP reconnect required");
+      if (enabled_) setState(LinkState::Retry, "Link lost; VSCP reconnect required", enabledEpoch_);
     }
     if (enabled_ && !client_->isConnected() && int32_t(millis() - retryAt_) >= 0) {
-      if (!connect(saved_, 0)) {
+      if (!connect(saved_, 0, enabledEpoch_)) {
         retryAt_ = millis() + backoff_; backoff_ = backoff_ < 8000 ? backoff_ * 2 : 8000;
-        setState(LinkState::Retry, "Saved Board unavailable");
+        setState(LinkState::Retry, "Saved Board unavailable", enabledEpoch_);
       }
       disconnected_.store(false);
     }
