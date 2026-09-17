@@ -16,19 +16,28 @@ void Central::setState(LinkState state, const char* error) {
   std::lock_guard<std::mutex> lock(stateMutex_);
   snapshot_.state = state; copy(snapshot_.error, error);
 }
-void Central::scan() { std::lock_guard<std::mutex> lock(stateMutex_); command_ = Command::Scan; }
+void Central::scan() {
+  channel_.disconnect();
+  std::lock_guard<std::mutex> lock(stateMutex_);
+  snapshot_.state = LinkState::Scanning; snapshot_.error[0] = 0;
+  command_ = Command::Scan;
+}
 bool Central::select(size_t index, uint32_t pin) {
   std::lock_guard<std::mutex> lock(stateMutex_);
   if (index >= snapshot_.count || pin > 999999) return false;
+  channel_.disconnect();
+  snapshot_.state = LinkState::Connecting; snapshot_.error[0] = 0;
   target_ = snapshot_.peers[index]; pin_ = pin; command_ = Command::Connect; return true;
 }
 bool Central::connectSaved() {
   std::lock_guard<std::mutex> lock(stateMutex_);
   if (!snapshot_.savedAddress[0]) return false;
+  channel_.disconnect();
+  snapshot_.state = LinkState::Connecting; snapshot_.error[0] = 0;
   command_ = Command::Saved; return true;
 }
-void Central::stop() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); command_ = Command::Stop; }
-void Central::forget() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); command_ = Command::Forget; }
+void Central::stop() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); snapshot_.state = LinkState::Idle; command_ = Command::Stop; }
+void Central::forget() { channel_.disconnect(); std::lock_guard<std::mutex> lock(stateMutex_); snapshot_.state = LinkState::Idle; command_ = Command::Forget; }
 void Central::onPassKeyEntry(NimBLEConnInfo& info) { NimBLEDevice::injectPassKey(info, pairingPin_.load()); }
 void Central::onDisconnect(NimBLEClient*, int) { channel_.disconnect(); disconnected_.store(true); }
 void Central::onAuthenticationComplete(NimBLEConnInfo& info) {
@@ -37,10 +46,17 @@ void Central::onAuthenticationComplete(NimBLEConnInfo& info) {
 }
 void Central::stopLink() {
   rx_ = nullptr;
+  if (channel_.online()) channel_.disconnect();
   if (client_->isConnected()) client_->disconnect();
+  const uint32_t started = millis();
+  while (client_->isConnected() && uint32_t(millis() - started) < 2500)
+    vTaskDelay(pdMS_TO_TICKS(10)); // Worker only; never proceed on the previous peer.
 }
 bool Central::connect(const Peer& peer, uint32_t pin) {
   setState(LinkState::Connecting);
+  if (client_->isConnected()) {
+    setState(LinkState::Error, "Previous peer disconnect pending"); return false;
+  }
   pairingPin_.store(pin);
   if (!client_->connect(NimBLEAddress(peer.address, peer.type), true)) {
     setState(LinkState::Error, "Board unavailable"); return false;
