@@ -46,12 +46,21 @@ int main() {
   });
   server.on(Command::Update, [](const Request&) { return Response::ok(); });
 
-  // Notification before INIT, no acknowledgement; duplicate is idempotent.
-  assert(client.bye()); server.poll();
+  // Every valid client BYE is acknowledged; the caller may choose not to wait.
+  ResponseStatus response; String error;
+  assert(client.bye());
+  assert(clientWire.outgoing.back() == "?type=BYE");
+  server.poll();
   assert(client.sessionClosed() && !client.isInitialized());
-  assert(byeEvents == 1 && clientWire.incoming.empty());
+  assert(byeEvents == 1);
+  assert(Codec::parseResponse(clientWire.incoming.back(), response, error));
+  assert(response.status == Status::Ok);
+  clientWire.incoming.clear();
   assert(client.bye()); server.poll();
-  assert(byeEvents == 1 && clientWire.incoming.empty());
+  assert(byeEvents == 1);
+  assert(Codec::parseResponse(clientWire.incoming.back(), response, error));
+  assert(response.status == Status::Ok);
+  clientWire.incoming.clear();
   assert(client.init().status == Status::Ok);
   assert(!client.sessionClosed());
 
@@ -65,7 +74,6 @@ int main() {
   serverWire.incoming.push_back("?type=UPDATE&id=S01");
   other.incoming.push_back("?type=UPDATE&id=S02");
   server.poll();
-  ResponseStatus response; String error;
   assert(Codec::parseResponse(clientWire.incoming.back(), response, error));
   assert(response.status == Status::Error && response.error == "Protocol not initialized");
   assert(Codec::parseResponse(other.outgoing.back(), response, error));
@@ -84,19 +92,30 @@ int main() {
   assert(!server.bye(unknown));
   assert(client.init().status == Status::Ok);
 
-  // Wrong role / acknowledgement-shaped BYE cannot close either endpoint.
-  serverWire.incoming.push_back("?type=BYE&side=server");
-  serverWire.incoming.push_back("?type=BYE&side=client&status=1");
-  server.poll(); server.poll();
-  assert(byeEvents == 2);
-  clientWire.incoming.push_back("?type=BYE&side=client");
-  clientWire.incoming.push_back("?type=BYE&side=server&status=1");
-  client.poll(); client.poll();
+  // Waiting turns the same BYE into a correlated close handshake.
+  client.setSequenceEnabled(true);
+  assert(client.bye(true, 100));
+  assert(client.sessionClosed() && byeEvents == 3);
+  Request acknowledgedBye;
+  assert(Codec::parseRequest(clientWire.outgoing.back(), acknowledgedBye, error));
+  assert(!acknowledgedBye.has("side") && acknowledgedBye.value("seq") == "1");
+  assert(Codec::parseResponse(serverWire.outgoing.back(), response, error));
+  assert(response.status == Status::Ok && response.parameters.at("seq") == "1");
+  assert(clientWire.incoming.empty());
+  client.setSequenceEnabled(false);
+  assert(client.init().status == Status::Ok);
+
+  // A response-shaped BYE cannot close either endpoint.
+  serverWire.incoming.push_back("?type=BYE&status=1");
+  server.poll();
+  assert(byeEvents == 3);
+  clientWire.incoming.push_back("?type=BYE&status=1");
+  client.poll();
   assert(client.isInitialized());
 
   // Incoming BYE also interrupts PING without waiting for timeout.
   serverWire.onWrite = [&](const String&) {
-    clientWire.incoming.push_back("?type=BYE&side=server");
+    clientWire.incoming.push_back("?type=BYE");
   };
   assert(client.ping().error == "Peer disconnected");
   assert(client.sessionClosed());
@@ -107,5 +126,9 @@ int main() {
   failing.writable = false;
   assert(!failingClient.bye() && !failingClient.sessionClosed());
   serverWire.writable = false;
+  Wire noResponse;
+  Client noResponseClient(noResponse, 100);
+  assert(!noResponseClient.bye(true, 5));
+  assert(noResponseClient.sessionClosed());
   assert(!server.bye(serverWire));
 }

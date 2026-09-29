@@ -118,8 +118,8 @@ Typické role zařízení:
 | `CONFIG` | `?type=CONFIG&id=<uid>&key=value...` | `?id=<uid>&status=1` | zápis konfiguračních parametrů |
 | `CONTROL` | `?type=CONTROL&id=<uid>&key=value...` | `?id=<uid>&status=1` | zápis runtime řídicích hodnot |
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | reset zařízení nebo jeho runtime stavu |
-| `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?side=<server/client>&seq=<number>&status=1` | kontrola dostupnosti protistrany v obou směrech |
-| `BYE` | `?type=BYE&side=<client/server>` | — | jednosměrné ukončení komunikační relace |
+| `PING` | `?type=PING&seq=<number>` | `?seq=<number>&status=1` | kontrola dostupnosti protistrany v obou směrech |
+| `BYE` | `?type=BYE[&seq=<number>]` | klientské BYE: `?seq=<number>&status=1` | ukončení relace; klient volí, zda na odpověď čeká |
 
 ## 7. INIT
 
@@ -462,34 +462,34 @@ Minimální příklad:
 ## 19. Obousměrný PING
 
 `PING` ověřuje dostupnost protistrany. Funguje před `INIT`, nevyžaduje `id`
-a nemění inicializaci protokolu ani připojení zařízení. Role odesílatele je
-pevná: Panel/klient používá `side=client`, Board/server používá `side=server`.
-Obě strany smějí zahájit ping, i současně.
+a nemění inicializaci protokolu ani připojení zařízení. Oba endpointy smějí
+zahájit ping, i současně.
 
 ```text
-Panel -> Board: ?type=PING&side=client&seq=42
-Board -> Panel: ?side=server&seq=42&status=1
+Panel -> Board: ?type=PING&seq=42
+Board -> Panel: ?seq=42&status=1
 
-Board -> Panel: ?type=PING&side=server&seq=17
-Panel -> Board: ?side=client&seq=17&status=1
+Board -> Panel: ?type=PING&seq=17
+Panel -> Board: ?seq=17&status=1
 ```
 
-Požadavek obsahuje `type=PING` a neobsahuje `status`. Platný požadavek dostane
-odpověď bez `type`, s vlastním `side`, převzatým `seq` a `status=1`. Na zprávu obsahující `status`
-se znovu neodpovídá. Pořadí parametrů není významné.
+Požadavek obsahuje `type=PING` a nemá `status`; odpověď obsahuje `status`
+a nemá command. Platný požadavek dostane odpověď se stejným `seq` a
+`status=1`. Na odpověď se znovu neodpovídá. Pořadí parametrů není významné.
 
 `seq` je desítkové celé číslo 1–4294967295 bez úvodních nul. Každý endpoint
 má vlastní čítač, který se zvyšuje pro každý pokus a po maximu pokračuje od 1.
-Čekající ping přijme pouze `status=1` od opačné role se shodným `seq`, před
-vypršením timeoutu. Nesprávné role/sekvence, neplatné pingy, duplicitní,
-nevyžádané a opožděné odpovědi se ignorují. Párování platí v rámci životnosti
+Klient tento čítač sdílí se sekvenovanými běžnými requesty. Čekající ping přijme
+pouze `status=1` se shodným `seq` před vypršením
+timeoutu. Nesprávné sekvence, neplatné pingy, duplicitní, nevyžádané a
+opožděné odpovědi se ignorují. Párování platí v rámci životnosti
 endpointu; sekvence nejsou identifikátorem relace napříč restartem.
 
 Server má nejvýše jeden vlastní čekající ping na transport; více transportů
 je nezávislých. Příchozí pingy se obsluhují i během čekání na odpověď na běžný
-příkaz. Odpověď bez `type` obsahující `side`, `seq` a `status` se směruje do
-obsluhy PING před běžnými odpověďmi. Potvrzení pingu nemůže nahradit odpověď na `UPDATE`
-nebo jinou transakci. Ostatní příkazy zachovávají původní formát.
+příkaz. Netypovaná odpověď může potvrdit PING pouze při čekajícím PINGu se stejným
+`seq`; sdílený klientský čítač brání kolizi s opožděnou běžnou odpovědí.
+Ostatní příkazy zachovávají původní formát.
 
 Knihovna nabízí synchronní `Client::ping()`, idle obsluhu `Client::poll()`,
 neblokující `Server::ping(transport, timeoutMs)` a `Server::pingResult(transport)`.
@@ -503,20 +503,27 @@ pinů. Knihovna nezapíná periodické pingy ani automatické obnovení spojení
 
 ## 20. BYE — ukončení relace
 
-`BYE` je jednosměrné oznámení, že odesílatel ukončuje svou komunikační relaci.
-Klient posílá `?type=BYE&side=client`, server posílá `?type=BYE&side=server`.
-Na BYE se neposílá odpověď; zpráva nemá `status` ani nepotřebuje `seq`.
-Platí i před INIT. Odesílatel a příjemce zruší inicializaci relace a čekající
-PING. Příjem během klientské transakce okamžitě vrátí chybu `Peer disconnected`.
+BYE oznamuje ukončení komunikační relace. Oba endpointy posílají
+`?type=BYE`, volitelně se `seq`; funguje i před INIT.
+Na každé platné klientské BYE server uzavře relaci, provede BYE handler a poté
+odešle `?status=1`. Pokud request obsahuje `seq`, odpověď jej zopakuje.
+Klient si volí, zda odpověď zpracuje a počká na ni před ukončením fyzického
+transportu. Serverové BYE směrem ke klientovi zůstává jednosměrným oznámením.
+
+Obě strany zruší inicializaci relace a čekající PING. Příjem serverového BYE
+během klientské transakce okamžitě vrátí chybu `Peer disconnected`.
 Další běžné příkazy vyžadují nový úspěšný INIT; PING zůstává dostupný.
 
 U serveru se ukončí pouze relace konkrétního transportu. Ostatní transporty
 zůstanou aktivní. Piny ani stav fyzických zařízení se neuvolňují a transport
-se fyzicky nezavírá. Přijatá role musí být opačná; BYE se špatnou rolí nebo
-s `status` relaci neukončí. Opakované oznámení nemá další účinek.
+se fyzicky nezavírá. BYE obsahující `status` relaci neukončí. Opakované
+oznámení nemá další účinek.
 
-API: `Client::bye()` a `Server::bye(transport)` vracejí výsledek zápisu,
-nikoli potvrzení doručení. Při selhání zápisu se lokální relace nemění.
+`Client::bye()` odešle BYE a lokálně zavře relaci bez čekání na odpověď.
+`Client::bye(true)` čeká nejvýše `BYE_RESPONSE_TIMEOUT_MS` na `status=1`;
+lokální relaci uzavře i při timeoutu a vrátí, zda odpověď obdržel.
+`Server::bye(transport)` zůstává jednosměrným oznámením. Při selhání
+nečekajícího zápisu se lokální relace nemění.
 `Client::sessionClosed()` dovoluje aplikaci zjistit ukončení relace.
 `Server::onBye(handler)` oznámí přijetí BYE a předá dotčený transport;
 duplicitní BYE nevyvolá další callback, dokud nový INIT neobnoví relaci.

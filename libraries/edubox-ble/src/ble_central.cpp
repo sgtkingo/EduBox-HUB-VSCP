@@ -227,7 +227,8 @@ void Central::run() {
     }
     channel_.expire(millis());
     if (enabled_ && enabledEpoch_ != requestEpoch_.load()) { enabled_ = false; stopLink(); }
-    if (disconnected_.exchange(false) || (enabled_ && client_->isConnected() && !channel_.online())) {
+    const bool disconnected = disconnected_.exchange(false);
+    if (enabled_ && (disconnected || (client_->isConnected() && !channel_.online()))) {
       stopLink(); retryAt_ = millis() + backoff_;
       backoff_ = backoff_ < 8000 ? backoff_ * 2 : 8000;
       if (enabled_) setState(LinkState::Retry, "Link lost; VSCP reconnect required", enabledEpoch_);

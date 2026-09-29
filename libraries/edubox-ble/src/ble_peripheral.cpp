@@ -85,7 +85,8 @@ void Peripheral::onSubscribe(NimBLECharacteristic*, NimBLEConnInfo& info, uint16
   std::lock_guard<std::mutex> lock(stateMutex_);
   if (info.getConnHandle() != handle_) return;
   subscribed_ = value == 2;
-  if (!subscribed_ && channel_.online()) channel_.fault();
+  // CCCD disable is a normal part of client teardown; poll() closes the BLE link.
+  if (!subscribed_ && channel_.online()) channel_.disconnect();
 }
 void Peripheral::onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& info) {
   std::lock_guard<std::mutex> lock(stateMutex_);
@@ -94,9 +95,13 @@ void Peripheral::onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& i
   const auto value = characteristic->getValue();
   channel_.receive(value.data(), value.size(), channel_.generation(), millis());
 }
-void Peripheral::onStatus(NimBLECharacteristic*, NimBLEConnInfo& info, int code) {
+void Peripheral::onStatus(NimBLECharacteristic*, NimBLEConnInfo&, int code) {
   std::lock_guard<std::mutex> lock(stateMutex_);
-  if (info.getConnHandle() == handle_ && waiting_ && code != 0)
+  // NimBLE-Arduino 2.5.1 invokes this overload for NOTIFY_TX with a default
+  // NimBLEConnInfo (the event's connection handle is not copied into it).
+  // This callback belongs exclusively to our TX characteristic and the build
+  // permits one BLE connection, so waiting_ is the reliable transaction guard.
+  if (waiting_ && code != 0)
     acknowledgement_ = code; // 0 = queued, EDONE = peer confirmation.
 }
 bool Peripheral::poll() {

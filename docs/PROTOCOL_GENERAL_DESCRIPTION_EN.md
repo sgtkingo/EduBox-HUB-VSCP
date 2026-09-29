@@ -118,8 +118,8 @@ Typical device roles:
 | `CONFIG` | `?type=CONFIG&id=<uid>&key=value...` | `?id=<uid>&status=1` | writing configuration parameters |
 | `CONTROL` | `?type=CONTROL&id=<uid>&key=value...` | `?id=<uid>&status=1` | writing runtime control values |
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | resetting a device or its runtime state |
-| `PING` | `?type=PING&side=<client/server>&seq=<number>` | `?side=<server/client>&seq=<number>&status=1` | bidirectional peer liveness check |
-| `BYE` | `?type=BYE&side=<client/server>` | — | one-way communication session closure |
+| `PING` | `?type=PING&seq=<number>` | `?seq=<number>&status=1` | bidirectional peer liveness check |
+| `BYE` | `?type=BYE[&seq=<number>]` | client BYE: `?seq=<number>&status=1` | session closure; client chooses whether to wait for the response |
 
 ## 7. INIT
 
@@ -462,31 +462,31 @@ Minimal example:
 ## 19. Bidirectional PING
 
 PING checks peer communication before INIT, without a device ID or changes to
-protocol initialization or device connections. The client sends `side=client`;
-the server sends `side=server`. Either side may initiate, including simultaneously.
+protocol initialization or device connections. Either endpoint may initiate, including simultaneously.
 
 ```text
-Client -> Server: ?type=PING&side=client&seq=42
-Server -> Client: ?side=server&seq=42&status=1
+Client -> Server: ?type=PING&seq=42
+Server -> Client: ?seq=42&status=1
 
-Server -> Client: ?type=PING&side=server&seq=17
-Client -> Server: ?side=client&seq=17&status=1
+Server -> Client: ?type=PING&seq=17
+Client -> Server: ?seq=17&status=1
 ```
 
-Requests have `type=PING` and no `status`. Valid requests receive the responder's
-`side`, the same `seq`, and `status=1`, without `type`. Frames containing `status` are never
-answered. Parameter order is immaterial. `seq` is a canonical decimal integer
+Requests have `type=PING` and no `status`; responses have `status` and no
+command. Valid requests receive the same `seq` and `status=1`. Responses are
+never answered. Parameter order is immaterial. `seq` is a canonical decimal integer
 from 1 to 4294967295, with no leading zeroes. Each endpoint advances its own
-counter per attempt and wraps to 1. Only a success from the opposite role with
-the pending sequence received before timeout acknowledges a local ping.
+counter per attempt and wraps to 1. The client shares this counter with sequenced
+ordinary requests. Only a success with the pending sequence received before
+timeout acknowledges a local ping.
 Invalid PING fields, unsolicited, duplicate and late replies are ignored.
 Matching is scoped to an endpoint lifetime, not across restarts.
 
 The server allows one pending local ping per transport; transports are independent.
 Incoming requests are serviced even during ordinary client transactions.
-Untyped responses with `side`, `seq` and `status` are routed as PING acknowledgements
-before ordinary responses. They cannot satisfy other transactions; existing commands
-retain their original wire format.
+An untyped response can acknowledge PING only while that endpoint has a pending
+PING with the same `seq`. The shared client counter prevents collision with late
+ordinary responses. Existing commands retain their original wire format.
 
 The API exposes synchronous `Client::ping()`, idle `Client::poll()`, non-blocking
 `Server::ping(transport, timeoutMs)` and `Server::pingResult(transport)`.
@@ -500,20 +500,28 @@ or automatic connection recovery is enabled by the library.
 
 ## 20. BYE — session closure
 
-BYE is a one-way notification that the sender is closing its communication
-session: `?type=BYE&side=client` or `?type=BYE&side=server`. It receives no
-reply and has no status or sequence. It works before INIT. The sender and
-receiver invalidate the affected session's initialization and cancel its PING.
-A client transaction receiving BYE immediately fails with `Peer disconnected`.
+BYE announces that the sender is closing its communication session:
+`?type=BYE`, optionally with `seq`. It works before INIT.
+For every valid client-to-server BYE, the server closes the session, runs the
+BYE handler and then returns `?status=1`. If the request contains `seq`, the
+response echoes it. The client chooses whether to process and wait for this
+response before closing its physical transport. Server-to-client BYE remains
+a one-way notification.
+
+Both peers invalidate the affected session's initialization and cancel its PING.
+A client receiving server BYE immediately fails with `Peer disconnected`.
 Normal commands require a new successful INIT; PING remains available.
 
 Only the affected server transport session closes. Other transports remain
 active. Device pins and hardware state are unchanged; the physical transport
-is not closed. Wrong-role BYE and frames containing status cannot close a
-session. Duplicate notifications are idempotent.
+is not closed. BYE frames containing status cannot close a session. Duplicate
+notifications are idempotent.
 
-`Client::bye()` and `Server::bye(transport)` return write success, not delivery
-confirmation. A failed write leaves the local session unchanged.
+`Client::bye()` sends BYE and closes locally without waiting for the server response.
+`Client::bye(true)` waits up to `BYE_RESPONSE_TIMEOUT_MS` for `status=1`;
+it closes locally even when the response times out and returns whether the
+response was received. `Server::bye(transport)` remains a one-way notification.
+A failed non-waiting write leaves the local session unchanged.
 `Client::sessionClosed()` exposes closure to the application.
 `Server::onBye(handler)` reports a received notification with its transport,
 once until a new successful INIT opens the session again. Incoming BYE is

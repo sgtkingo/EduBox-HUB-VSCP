@@ -18,8 +18,9 @@ public:
   // Call poll regularly while idle to answer server-initiated PING.
   void poll();
   ResponseStatus ping();
-  // One-way session close notification. No response is expected.
-  bool bye();
+  // Every client BYE receives status=1. The caller chooses whether to wait for
+  // that response before closing locally.
+  bool bye(bool waitForResponse = false, unsigned long responseTimeoutMs = BYE_RESPONSE_TIMEOUT_MS);
   bool sessionClosed() const { return closed_; }
   // Physical link loss: no write/BYE, cancel pending protocol state locally.
   void closeSession();
@@ -41,7 +42,8 @@ public:
 
 private:
   bool consumeBye(const String& message);
-  ResponseStatus transact(Command command, Parameters parameters, bool requiresInit, const String& expectedId = "");
+  String nextSequence();
+  ResponseStatus transact(Command command, Parameters parameters, unsigned long timeoutOverrideMs = 0);
 
   Transport& transport_;
   unsigned long timeoutMs_;

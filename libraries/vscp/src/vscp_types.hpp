@@ -15,6 +15,7 @@ namespace vscp {
 constexpr const char* API_VERSION = VSCP_API_VERSION;
 constexpr size_t MAX_MESSAGE_SIZE = MAX_PROTOCOL_REQUEST_SIZE;
 constexpr unsigned long DEFAULT_TIMEOUT_MS = PROTOCOL_INIT_TIMEOUT;
+constexpr unsigned long BYE_RESPONSE_TIMEOUT_MS = 500;
 
 using Parameters = std::map<String, String>;
 

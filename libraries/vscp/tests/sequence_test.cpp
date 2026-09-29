@@ -62,7 +62,16 @@ int main() {
   const auto writes = clientWire.tx.size();
   client.closeSession();
   assert(!client.isInitialized() && client.sessionClosed() && clientWire.tx.size() == writes);
-  assert(client.control("A02", {}).status == vscp::Status::Error);
-  assert(clientWire.tx.size() == writes);
+  clientWire.written = [&](const vscp::String& line) {
+    vscp::Request request; assert(vscp::Codec::parseRequest(line, request, error));
+    auto rejected = vscp::Response::fail("Protocol not initialized");
+    rejected.parameters["seq"] = request.value("seq");
+    rejected.parameters["id"] = request.value("id");
+    clientWire.rx.push_back(vscp::Codec::buildResponse(rejected));
+  };
+  const auto afterClose = client.control("A02", {});
+  assert(afterClose.status == vscp::Status::Error);
+  assert(afterClose.error == "Protocol not initialized");
+  assert(clientWire.tx.size() == writes + 1);
   std::cout << "PASS optional seq and local close\n";
 }

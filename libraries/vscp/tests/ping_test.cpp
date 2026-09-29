@@ -82,23 +82,20 @@ int main() {
   server.poll();
   assert(server.pingResult(serverWire).state == PingState::Ok);
 
-  // Wrong sequence, side, error status and malformed sequence cannot acknowledge.
+  // Wrong sequence, error status, malformed sequence and typed responses cannot acknowledge.
   assert(server.ping(otherWire, 20));
   const String seq = server.pingResult(otherWire).sequence;
   for (const String& message : std::vector<String>{
-      "?side=client&seq=999&status=1",
-      "?side=server&seq=" + seq + "&status=1",
-      "?side=client&seq=" + seq + "&status=0",
-      "?side=client&seq=4294967296&status=1",
-      "?type=PING&side=client&seq=0", "?type=PING&side=client&seq=01",
-      "?type=PING&side=client", "?type=PING&seq=1"}) {
+      "?seq=999&status=1", "?seq=" + seq + "&status=0",
+      "?seq=4294967296&status=1", "?type=PING&seq=" + seq + "&status=1",
+      "?type=PING&seq=0", "?type=PING&seq=01", "?type=PING"}) {
     otherWire.incoming.push_back(message);
     const auto count = otherWire.outgoing.size();
     server.poll();
     assert(server.pingResult(otherWire).state == PingState::Pending);
     assert(otherWire.outgoing.size() == count);
   }
-  otherWire.incoming.push_back("?side=client&seq=" + seq + "&status=1");
+  otherWire.incoming.push_back("?seq=" + seq + "&status=1");
   server.poll();
   assert(server.pingResult(otherWire).state == PingState::Ok);
 
@@ -110,13 +107,13 @@ int main() {
   assert(server.ping(otherWire, 20));
   const String newSeq = server.pingResult(otherWire).sequence;
   assert(oldSeq != newSeq);
-  otherWire.incoming.push_back("?side=client&seq=" + oldSeq + "&status=1");
+  otherWire.incoming.push_back("?seq=" + oldSeq + "&status=1");
   server.poll();
   assert(server.pingResult(otherWire).state == PingState::Pending);
-  otherWire.incoming.push_back("?side=client&seq=" + newSeq + "&status=1");
+  otherWire.incoming.push_back("?seq=" + newSeq + "&status=1");
   server.poll();
   assert(server.pingResult(otherWire).state == PingState::Ok);
-  otherWire.incoming.push_back("?side=client&seq=" + newSeq + "&status=1");
+  otherWire.incoming.push_back("?seq=" + newSeq + "&status=1");
   const auto count = otherWire.outgoing.size();
   server.poll();
   assert(otherWire.outgoing.size() == count);
@@ -124,26 +121,28 @@ int main() {
   // Client filters mismatched and untagged acknowledgements too.
   TestTransport scripted;
   Client scriptedClient(scripted, 10);
+  scriptedClient.setSequenceEnabled(true);
   scripted.onWrite = [&](const String& message) {
     const Request request = parse(message);
     if (request.command != Command::Ping || request.has("status")) return;
     scripted.incoming.push_back("?status=1");
-    scripted.incoming.push_back("?side=server&seq=999&status=1");
-    scripted.incoming.push_back("?side=client&seq=" + request.value("seq") + "&status=1");
-    scripted.incoming.push_back("?side=server&seq=" + request.value("seq") + "&status=1");
+    scripted.incoming.push_back("?seq=999&status=1");
+    scripted.incoming.push_back("?seq=" + request.value("seq") + "&status=0");
+    scripted.incoming.push_back("?seq=" + request.value("seq") + "&status=1");
   };
   assert(scriptedClient.ping().status == Status::Ok);
   scripted.onWrite = [&](const String& message) {
-    if (parse(message).command != Command::Init) return;
-    scripted.incoming.push_back("?side=server&seq=1&status=1");
-    scripted.incoming.push_back("?type=PING&side=server&seq=77");
-    scripted.incoming.push_back("?status=1&api=" + String(API_VERSION));
+    const Request request = parse(message);
+    if (request.command != Command::Init) return;
+    scripted.incoming.push_back("?seq=1&status=1");
+    scripted.incoming.push_back("?type=PING&seq=77");
+    scripted.incoming.push_back("?seq=" + request.value("seq") + "&status=1&api=" + String(API_VERSION));
   };
   const auto init = scriptedClient.init();
   assert(init.status == Status::Ok && init.parameters.at("api") == API_VERSION);
   assert(init.parameters.count("type") == 0);
   const auto answered = parse(scripted.outgoing.back());
-  assert(answered.value("seq") == "77" && answered.value("side") == "client");
+  assert(answered.value("seq") == "77" && !answered.has("side"));
   assert(answered.value("status") == "1" && !answered.has("type"));
   scripted.onWrite = nullptr;
   assert(scriptedClient.ping().error == "Response timeout");

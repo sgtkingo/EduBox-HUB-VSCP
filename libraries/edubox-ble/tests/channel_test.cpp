@@ -42,7 +42,8 @@ int main() {
   b.open();
   assert(b.receive(old.data.data(), old.size, b.generation(), UINT32_MAX - 1000));
   b.expire(4000); assert(!b.online() && b.takeLoss()); // Wrap-safe partial timeout.
-  a.disconnect(); assert(!a.open()); assert(a.takeLoss()); assert(a.open());
+  a.disconnect(); assert(!a.open()); assert(a.takeLoss());
+  a.disconnect(); assert(!a.takeLoss()); assert(a.open()); // Duplicate callback is idempotent.
   assert(!a.confirm(old)); // Generation invalidates stale TX ack.
   assert(!a.receive(old.data.data(), old.size, old.generation, 10)); // Old callback.
   Line line; assert(!a.read(line)); Packet empty; assert(!a.packet(23, empty));

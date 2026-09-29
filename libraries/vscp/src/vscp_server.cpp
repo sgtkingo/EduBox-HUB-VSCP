@@ -58,14 +58,17 @@ void Server::process(Endpoint& endpoint, const String& message) {
   }
 
   if (request.command == Command::Bye) {
-    if (request.value("side") == "client" && !request.has("status")) {
+    if (!request.has("status")) {
       const bool notify = !endpoint.closed;
       endpoint.initialized = false;
       endpoint.closed = true;
       endpoint.ping.cancel();
       if (notify && byeHandler_) byeHandler_(*endpoint.transport);
+      Response response = Response::ok();
+      if (request.has("seq")) response.parameters["seq"] = request.value("seq");
+      endpoint.transport->writeLine(Codec::buildResponse(response));
     }
-    return; // BYE is a notification, including before INIT. Never acknowledge it.
+    return; // Every valid client BYE receives status=1 after local cleanup.
   }
 
   const bool wasClosed = endpoint.closed;
@@ -83,7 +86,7 @@ void Server::process(Endpoint& endpoint, const String& message) {
 bool Server::bye(Transport& transport) {
   for (auto& endpoint : endpoints_) {
     if (endpoint.transport != &transport) continue;
-    if (!transport.writeLine(Codec::buildRequest(Command::Bye, {{"side", "server"}}))) return false;
+    if (!transport.writeLine(Codec::buildRequest(Command::Bye, {}))) return false;
     endpoint.initialized = false;
     endpoint.closed = true;
     endpoint.ping.cancel();

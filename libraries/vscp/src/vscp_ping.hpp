@@ -10,20 +10,22 @@ namespace detail {
 // One exchange per transport; all reads remain owned by Client/Server.
 class PingExchange {
 public:
-  explicit PingExchange(bool server) : server_(server) {}
 
-  bool start(Transport& transport, unsigned long timeoutMs) {
+  explicit PingExchange(bool server) : server_(server) {}
+  bool start(Transport& transport, unsigned long timeoutMs, const String& requestedSequence = "") {
     expire();
     if (result_.state == PingState::Pending) return false;
-    if (++sequence_ == 0) ++sequence_;
-    char sequence[11];
-    std::snprintf(sequence, sizeof(sequence), "%lu", static_cast<unsigned long>(sequence_));
-    result_.sequence = sequence;
+    if (stringLength(requestedSequence)) result_.sequence = requestedSequence;
+    else {
+      if (++sequence_ == 0) ++sequence_;
+      char sequence[11];
+      std::snprintf(sequence, sizeof(sequence), "%lu", static_cast<unsigned long>(sequence_));
+      result_.sequence = sequence;
+    }
     result_.state = PingState::Pending;
     startedAt_ = monotonicMilliseconds();
     timeoutMs_ = timeoutMs;
-    if (!transport.writeLine(Codec::buildRequest(Command::Ping,
-        {{"side", localSide()}, {"seq", result_.sequence}}))) {
+    if (!transport.writeLine(Codec::buildRequest(Command::Ping, {{"seq", result_.sequence}}))) {
       result_.state = PingState::WriteError;
       return false;
     }
@@ -50,18 +52,17 @@ public:
     Request request;
     String error;
     if (!Codec::parseParameters(message, request.parameters, error)) return false;
-    const bool pingRequest = request.has("type") && commandFromName(request.value("type")) == Command::Ping;
-    const bool pingResponse = !request.has("type") && request.has("side") &&
-                              request.has("seq") && request.has("status");
-    if (!pingRequest && !pingResponse) return false;
-    // Old typed acknowledgements are consumed but cannot acknowledge a new PING.
-    if (pingRequest && request.has("status")) return true;
     expire();
+    const bool pingRequest = request.has("type") && commandFromName(request.value("type")) == Command::Ping;
+    const bool pingResponse = !request.has("type") && request.has("seq") && request.has("status") &&
+                              (server_ || result_.state == PingState::Pending);
+    if (!pingRequest && !pingResponse) return false;
+    if (pingRequest && request.has("status")) return true;
     // Invalid PING frames are consumed silently; never answer a response.
-    if (request.value("side") != remoteSide() || !validSequence(request.value("seq"))) return true;
+    if (!validSequence(request.value("seq"))) return true;
     if (!request.has("status")) {
       Response response = Response::ok();
-      response.parameters = {{"side", localSide()}, {"seq", request.value("seq")}};
+      response.parameters = {{"seq", request.value("seq")}};
       transport.writeLine(Codec::buildResponse(response));
     } else if (request.value("status") == "1" && result_.state == PingState::Pending &&
                request.value("seq") == result_.sequence) {
@@ -84,10 +85,8 @@ private:
     }
     return true;
   }
-  const char* localSide() const { return server_ ? "server" : "client"; }
-  const char* remoteSide() const { return server_ ? "client" : "server"; }
-  bool server_;
   uint32_t sequence_ = 0;
+  bool server_;
   unsigned long startedAt_ = 0;
   unsigned long timeoutMs_ = 0;
   PingResult result_;

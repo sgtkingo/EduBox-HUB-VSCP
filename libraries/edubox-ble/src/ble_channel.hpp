@@ -59,7 +59,7 @@ public:
     if (online_ || loss_) return false;
     clear(); ++generation_; online_ = true; return true;
   }
-  void disconnect() { std::lock_guard<std::mutex> lock(mutex_); lose(false); }
+  void disconnect() { std::lock_guard<std::mutex> lock(mutex_); if (online_) lose(false); }
   void fault() { std::lock_guard<std::mutex> lock(mutex_); lose(true); }
   bool takeLoss() { std::lock_guard<std::mutex> lock(mutex_); bool value = loss_; loss_ = false; return value; }
   bool online() const { std::lock_guard<std::mutex> lock(mutex_); return online_; }

@@ -73,21 +73,23 @@ matching the framing behavior of the original UART messenger.
 ## Bidirectional PING
 
 PING checks peer communication without INIT, device handlers, or pin changes.
-Client is always `side=client`; each Server endpoint is `side=server`.
+Either endpoint may initiate, including simultaneously.
 
 ```text
-?type=PING&side=client&seq=42
-?side=server&seq=42&status=1
+?type=PING&seq=42
+?seq=42&status=1
 ```
 
-Either side may initiate, including simultaneously. Requests contain `type=PING`; acknowledgements contain `side`, `seq` and
-`status` without `type`. These fields route acknowledgements separately; acknowledgements are never answered. `seq` is a
-canonical decimal integer from 1 to 4294967295. Each endpoint generates its own
-sequence, advancing for every attempt and wrapping to 1. Only `status=1` from
-the opposite side with the pending sequence is accepted before the deadline.
-Invalid PING fields, unsolicited, duplicate and late replies are ignored.
-Parameter order is immaterial; existing commands retain their wire format.
-Sequence matching applies within an endpoint lifetime, not across restarts.
+Requests contain `type=PING` and no `status`; responses contain `status` and
+no command. Responses are never answered. `seq` is a canonical decimal integer
+from 1 to 4294967295. Each endpoint generates its own outgoing sequence,
+advancing for every attempt and wrapping to 1. The client shares this counter
+between PING and sequenced ordinary requests, preventing a late ordinary
+response from acknowledging a newer PING. Only `status=1` with the pending
+sequence is accepted before the deadline. Invalid PING fields, unsolicited,
+duplicate and late replies are ignored. Parameter order is immaterial; existing
+commands retain their wire format. Sequence matching applies within an endpoint
+lifetime, not across restarts.
 
 ```cpp
 // Client: synchronous, uses the constructor's timeout, does not initialize.
@@ -135,19 +137,22 @@ Use it for physical link loss; application hardware cleanup remains explicit.
 These additions do not change the API 1.6 wire format.
 
 ```text
-?type=BYE&side=client
+?type=BYE
+?type=BYE&seq=42
 ```
 
-The server may likewise send `side=server`. BYE has no reply, status or sequence.
-It works before INIT, closes only this transport's protocol session and cancels
-its PING. Hardware connections/pins and the physical transport are unchanged.
-Further normal requests need a new INIT; PING still works. Receiving BYE while
-waiting for a response immediately returns `Peer disconnected`.
+Either endpoint may send BYE. Every client-to-server BYE receives `status=1`;
+when `seq` is present, the response echoes it. Server-to-client BYE remains
+one-way. BYE works before INIT, closes only this transport's protocol session
+and cancels its PING. Hardware connections/pins and the physical transport are
+unchanged. Further normal requests need a new INIT; PING still works. Receiving
+BYE while waiting for a response immediately returns `Peer disconnected`.
 
-Use `client.bye()` or `server.bye(transport)` to send. The boolean result means
-write success, not confirmed delivery; failed writes leave local state intact.
+Use `client.bye()` to send without waiting, or `client.bye(true)` to wait for
+the response before closing locally. `server.bye(transport)` sends the one-way
+server notification. Failed non-waiting writes leave local state intact.
 Use `client.sessionClosed()` to observe closure, or `server.onBye(handler)` to
 observe a remote BYE with the affected `Transport&`. The callback fires once
 per closed session and is rearmed by successful INIT. These methods share the
 same single-owner execution requirements as poll and other transactions.
-Wrong-role and status-bearing BYE messages do not close a session.
+Status-bearing BYE messages do not close a session.
