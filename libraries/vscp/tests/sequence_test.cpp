@@ -26,7 +26,7 @@ int main() {
   server.addTransport(wire);
   server.on(vscp::Command::Init, [](const vscp::Request&) { return vscp::Response::ok(); });
   server.on(vscp::Command::Update, [](const vscp::Request&) { return vscp::Response::ok(); });
-  wire.rx.push_back("?type=INIT&api=1.6&seq=37"); server.poll();
+  wire.rx.push_back("?type=INIT&api=1.7&seq=37"); server.poll();
   vscp::ResponseStatus response; vscp::String error;
   assert(vscp::Codec::parseResponse(wire.tx.back(), response, error));
   assert(response.parameters.at("seq") == "37");

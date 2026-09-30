@@ -50,12 +50,12 @@ int main() {
   stripReceiver.connectTo(stripSender);
   vscp::String dirtyMessage;
   dirtyMessage += static_cast<char>(1);
-  dirtyMessage += "  ?type=INIT&api=1.6  ";
+  dirtyMessage += "  ?type=INIT&api=1.7  ";
   dirtyMessage += static_cast<char>(127);
   stripSender.writeLine(dirtyMessage);
   vscp::String cleanMessage;
   assert(stripReceiver.readLine(cleanMessage) == vscp::ReadStatus::Message);
-  assert(cleanMessage == "?type=INIT&api=1.6");
+  assert(cleanMessage == "?type=INIT&api=1.7");
 
   MemoryTransport clientTransport;
   MemoryTransport serverTransport;
@@ -67,6 +67,14 @@ int main() {
   std::map<vscp::String, vscp::String> configuredValues;
   std::map<vscp::String, vscp::String> controlledValues;
   bool connected = false;
+  bool pairReset = false;
+  server.on(vscp::Command::Pair, [&](const vscp::Request& request) {
+    pairReset = request.value("reset") == "1";
+    auto response = vscp::Response::ok();
+    response.parameters["board_id"] = "EB-A4CF-129B73E8";
+    response.parameters["pin"] = "483271";
+    return response;
+  });
 
   server.on(vscp::Command::Init, [](const vscp::Request& request) {
     return request.value("api") == vscp::API_VERSION
@@ -116,6 +124,10 @@ int main() {
   });
 
   vscp::Client client(clientTransport, 100);
+  const auto pairing = client.pair(true);
+  assert(pairing.status == vscp::Status::Ok && pairReset);
+  assert(pairing.parameters.at("board_id") == "EB-A4CF-129B73E8");
+  assert(pairing.parameters.at("pin") == "483271");
   const vscp::ResponseStatus beforeInit = client.update("S01");
   assert(beforeInit.status == vscp::Status::Error);
   assert(beforeInit.error == "Protocol not initialized");

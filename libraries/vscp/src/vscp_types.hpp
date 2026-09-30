@@ -29,7 +29,8 @@ enum class Command : uint8_t {
   Control,
   Reset,
   Ping,
-  Bye
+  Bye,
+  Pair
 };
 
 enum class Status : uint8_t {

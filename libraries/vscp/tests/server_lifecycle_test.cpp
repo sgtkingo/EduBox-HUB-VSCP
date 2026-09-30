@@ -25,8 +25,8 @@ int main() {
   });
   // Old single-argument handler overload must remain source-compatible.
   server.on(vscp::Command::Update, [](const vscp::Request&) { return vscp::Response::ok(); });
-  first.incoming.push_back("?type=INIT&api=1.6");
-  second.incoming.push_back("?type=INIT&api=1.6");
+  first.incoming.push_back("?type=INIT&api=1.7");
+  second.incoming.push_back("?type=INIT&api=1.7");
   server.poll(); assert(source == &second);
   int callbacks = 0;
   server.onBye([&callbacks](vscp::Transport&) { ++callbacks; });
@@ -44,7 +44,7 @@ int main() {
   assert(response.status == vscp::Status::Error);
   assert(vscp::Codec::parseResponse(second.outgoing.back(), response, error));
   assert(response.status == vscp::Status::Ok);
-  first.incoming.push_back("?type=INIT&api=1.6"); server.poll();
+  first.incoming.push_back("?type=INIT&api=1.7"); server.poll();
   assert(source == &first);
   first.incoming.push_back("?type=UPDATE&id=S01"); server.poll();
   assert(vscp::Codec::parseResponse(first.outgoing.back(), response, error));

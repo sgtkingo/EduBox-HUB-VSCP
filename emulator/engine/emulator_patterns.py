@@ -812,7 +812,7 @@ class VSCPEmulator:
         
         try:
             print("\n💡 Enhanced emulator ready! Realistic sensor data patterns active.")
-            print("   Example: ?type=INIT&app=board&db=1.0&api=1.6")
+            print("   Example: ?type=INIT&app=board&db=1.0&api=1.7")
             print("   Press Ctrl+C to stop\n")
             
             # Keep main thread alive and show simulation status

@@ -1,4 +1,4 @@
-"""Both API 1.6 emulators mirror the shared server PING framing rules."""
+"""Both API 1.7 emulators mirror the shared server PING framing rules."""
 import unittest
 
 from emulator.engine.emulator import VSCPEmulator as BasicEmulator
@@ -10,7 +10,7 @@ class PingTest(unittest.TestCase):
         for emulator_type in (BasicEmulator, PatternEmulator):
             emulator = emulator_type()
             with self.subTest(emulator=emulator_type):
-                self.assertEqual(emulator.API_VERSION, "1.6")
+                self.assertEqual(emulator.API_VERSION, "1.7")
                 for sequence in ("1", "4294967295"):
                     response = emulator.parse_message(emulator.process_request(
                         f"?seq={sequence}&side=client&type=PING"))
@@ -18,7 +18,7 @@ class PingTest(unittest.TestCase):
                         "side": "server", "seq": sequence, "status": "1"})
                 self.assertFalse(emulator.initialized)
                 self.assertEqual(emulator.connected_sensors, {})
-                emulator.process_request("?type=INIT&api=1.6&app=board&db=1.3")
+                emulator.process_request("?type=INIT&api=1.7&app=board&db=1.3")
                 self.assertTrue(emulator.initialized)
                 self.assertIn("status=1", emulator.process_request("?type=PING&side=client&seq=2"))
                 self.assertTrue(emulator.initialized)

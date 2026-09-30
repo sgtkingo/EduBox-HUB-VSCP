@@ -25,13 +25,13 @@ class ByeTest(unittest.TestCase):
             self.assertEqual(emulator.connected_sensors, {"S01": [7]})
 
     def test_close_reinitialize_and_keep_pins(self):
-        self.assertEqual((API_VERSION, LIBRARY_VERSION), ("1.6", "2.2.2"))
+        self.assertEqual((API_VERSION, LIBRARY_VERSION), ("1.7", "2.3.0"))
         for emulator_type in (BasicEmulator, PatternEmulator):
             with self.subTest(emulator=emulator_type.__name__):
                 emulator = emulator_type()
                 self.assertEqual(emulator.process_request("?type=BYE&side=client"), "")
                 self.assertFalse(emulator.initialized)
-                self.assertIn("status=1", emulator.process_request("?type=INIT&api=1.6"))
+                self.assertIn("status=1", emulator.process_request("?type=INIT&api=1.7"))
                 self.assertIn("status=1", emulator.process_request("?type=CONNECT&id=S01&pins=7"))
                 pins = dict(emulator.connected_sensors)
                 self.assertTrue(pins)
@@ -45,7 +45,7 @@ class ByeTest(unittest.TestCase):
                 self.assertIn("Protocol not initialized", emulator.process_request("?type=UPDATE&id=S01"))
                 self.assertEqual(emulator.parse_message(emulator.process_request("?type=PING&side=client&seq=22")),
                                  {"side": "server", "seq": "22", "status": "1"})
-                self.assertIn("status=1", emulator.process_request("?type=INIT&api=1.6"))
+                self.assertIn("status=1", emulator.process_request("?type=INIT&api=1.7"))
                 self.assertEqual(emulator.connected_sensors, pins)
 
 

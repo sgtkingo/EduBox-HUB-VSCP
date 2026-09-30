@@ -8,10 +8,10 @@ It connects the HUB with [EduBox HUB App](https://github.com/sgtkingo/EduBox-HUB
 [EduBox HUB Panel](https://github.com/sgtkingo/EduBox-HUB-Panel), emulators and
 compatible custom hardware.
 
-This repository contains version `2.2.2` of the protocol library. It provides
+This repository contains version `2.3.0` of the protocol library. It provides
 both sides of the protocol: a synchronous request
 `Client` for an HMI/controller and a handler-based, non-blocking `Server` for a
-device or HUB. The current wire API version is `1.6`.
+device or HUB. The current wire API version is `1.7`.
 
 This project is not the event-based *Very Simple Control Protocol*.
 
@@ -237,7 +237,7 @@ compiler definitions:
 
 | Definition | Default | Meaning |
 | --- | --- | --- |
-| `VSCP_API_VERSION` | `"1.6" | API version sent by `Client::init()` |
+| `VSCP_API_VERSION` | `"1.7" | API version sent by `Client::init()` |
 | `MAX_PROTOCOL_REQUEST_SIZE` | `1024` | Maximum protocol frame size |
 | `PROTOCOL_INIT_TIMEOUT` | `500` | Default client response timeout in milliseconds |
 | `PROTOCOL_VERBOSE` | `1` | Diagnostic verbosity |
@@ -252,9 +252,10 @@ For implementation-specific notes and upstream provenance, see
 [`libraries/vscp/README.md`](libraries/vscp/README.md) and
 [`libraries/vscp/UPSTREAM.md`](libraries/vscp/UPSTREAM.md).
 
-## API 1.6 revision / EduBox BLE bridge
+## API 1.6 sequence revision / EduBox BLE bridge
 
-The wire API remains 1.6. Optional ordinary command `seq` is echoed by the
+The optional ordinary command `seq` introduced under API 1.6 remains available
+in API 1.7. It is echoed by the
 server; clients can opt into strict matching. Legacy requests remain unchanged.
 `Client::closeSession()` and disconnect-aware `Transport::isAvailable()`
 support local invalidation without a wire BYE. See

@@ -37,13 +37,17 @@ public:
   ResponseStatus control(const String& uid, const Parameters& parameters);
   ResponseStatus reset(const String& uid);
 
+  // Physical UART commissioning; valid before INIT and always sequenced.
+  ResponseStatus pair(bool resetExisting = false);
+
   bool isInitialized() const { return initialized_; }
   const char* apiVersion() const { return API_VERSION; }
 
 private:
   bool consumeBye(const String& message);
   String nextSequence();
-  ResponseStatus transact(Command command, Parameters parameters, unsigned long timeoutOverrideMs = 0);
+  ResponseStatus transact(Command command, Parameters parameters, unsigned long timeoutOverrideMs = 0,
+                          bool forceSequence = false);
 
   Transport& transport_;
   unsigned long timeoutMs_;

@@ -15,7 +15,7 @@ class Peripheral : private NimBLEServerCallbacks, private NimBLECharacteristicCa
   NimBLECharacteristic* tx_ = nullptr;
   NimBLECharacteristic* status_ = nullptr;
   Preferences preferences_;
-  std::mutex stateMutex_;
+  mutable std::mutex stateMutex_;
   uint16_t handle_ = BLE_HS_CONN_HANDLE_NONE, mtu_ = 23;
   uint32_t pin_ = 0, pairingUntil_ = 0, pendingAt_ = 0;
   std::string trusted_, candidate_;
@@ -33,11 +33,14 @@ class Peripheral : private NimBLEServerCallbacks, private NimBLECharacteristicCa
   void onStatus(NimBLECharacteristic*, NimBLEConnInfo&, int) override;
 public:
   explicit Peripheral(Channel& channel) : channel_(channel) {}
-  bool begin(const char* name, bool forgetBond = false, uint32_t pairingWindowMs = 120000);
+  bool begin(const char* boardId, uint32_t pairingPin, bool forgetBond = false,
+             uint32_t pairingWindowMs = 120000);
   uint32_t pairingPin() const { return pin_; } // Local commissioning console only.
+  bool paired() const;
+  bool openPairingWindow(uint32_t pairingWindowMs = 120000);
   // Returns true once per loss/fault. Caller MUST clean VSCP/devices immediately.
   bool poll();
-  bool forgetBond(); // Main-loop local physical commissioning only.
+  bool forgetBond(uint32_t pairingWindowMs = 120000); // Physical/cable commissioning only.
 };
 }}
 #endif

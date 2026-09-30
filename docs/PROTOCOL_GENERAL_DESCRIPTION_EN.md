@@ -1,6 +1,6 @@
 # VSCP Protocol
 
-Current API version: `1.6`. VSCP library version: `2.2.2`.
+Current API version: `1.7`. VSCP library version: `2.3.0`.
 
 **VSCP** (*Virtual Sensors Communication Protocol*) is a simple text-based protocol for exchanging messages between a controller application and a target device. The protocol is designed for scenarios where sensor values need to be read, actuators need to be controlled, device parameters need to be configured, and connections to physical or logical pins need to be confirmed.
 
@@ -120,6 +120,7 @@ Typical device roles:
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | resetting a device or its runtime state |
 | `PING` | `?type=PING&seq=<number>` | `?seq=<number>&status=1` | bidirectional peer liveness check |
 | `BYE` | `?type=BYE[&seq=<number>]` | client BYE: `?seq=<number>&status=1` | session closure; client chooses whether to wait for the response |
+| `PAIR` | `?type=PAIR&seq=<number>[&reset=1]` | `?seq=<number>&status=1&board_id=<id>&pin=<pin>` | physical commissioning before INIT |
 
 ## 7. INIT
 
@@ -128,7 +129,7 @@ Typical device roles:
 Request:
 
 ```text
-?type=INIT&app=board&db=1.0&api=1.6
+?type=INIT&app=board&db=1.0&api=1.7
 ```
 
 Parameters:
@@ -333,7 +334,7 @@ Such an extension should be explicitly described in the application profile.
 ### 14.1 Sensor Example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.7
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=temp_sensor&pins=1
@@ -349,7 +350,7 @@ Device -> Controller: ?id=temp_sensor&status=1
 ### 14.2 Actuator Example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.7
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=led_01&pins=3
@@ -365,7 +366,7 @@ Device -> Controller: ?id=led_01&status=1
 ### 14.3 Hybrid Regulator Example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.7
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=heater_01&pins=3,5,6
@@ -452,7 +453,7 @@ A minimal VSCP implementation should support:
 Minimal example:
 
 ```text
-?type=INIT&api=1.6
+?type=INIT&api=1.7
 ?status=1
 
 ?type=UPDATE&id=temp_sensor
@@ -525,4 +526,23 @@ A failed non-waiting write leaves the local session unchanged.
 `Client::sessionClosed()` exposes closure to the application.
 `Server::onBye(handler)` reports a received notification with its transport,
 once until a new successful INIT opens the session again. Incoming BYE is
+
+## 21. PAIR — physical commissioning
+
+`PAIR` carries commissioning data before `INIT`. It is always correlated with
+`seq`; `Client::pair()` adds a sequence even when ordinary transaction sequencing
+is disabled. The server permits PAIR before initialization, but transport
+authorization remains application policy.
+
+```text
+Client -> Server: ?type=PAIR&seq=1
+Server -> Client: ?seq=1&status=1&board_id=EB-A4CF-129B73E8&pin=483271
+```
+
+The EduBox Board application accepts PAIR only on its physical UART link.
+`board_id` is the exact printable label and BLE advertising name; `pin` is the
+six-digit label PIN. An existing bond returns `status=0&error=already_paired`.
+Explicit replacement uses `?type=PAIR&seq=2&reset=1`; after deleting the old
+bond, the same success fields are returned. PIN derivation and reset policy are
+outside the protocol library.
 serviced by poll and while the client waits for responses.

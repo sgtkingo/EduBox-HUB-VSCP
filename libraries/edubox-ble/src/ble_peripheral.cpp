@@ -1,20 +1,16 @@
 #ifdef ARDUINO_ARCH_ESP32
 #include "ble_peripheral.hpp"
-#include <esp_system.h>
 
 namespace edubox { namespace ble {
-bool Peripheral::begin(const char* name, bool forgetBond, uint32_t window) {
+bool Peripheral::begin(const char* boardId, uint32_t pairingPin, bool forgetBond, uint32_t window) {
   if (!preferences_.begin("edubox-ble", false)) return false;
   if (forgetBond && !preferences_.clear()) return false;
-  pin_ = preferences_.getUInt("pin", 0);
-  if (pin_ < 100000 || pin_ > 999999) {
-    pin_ = 100000 + esp_random() % 900000;
-    if (!preferences_.putUInt("pin", pin_)) return false;
-  }
+  if (!boardId || !boardId[0] || pairingPin < 100000 || pairingPin > 999999) return false;
+  pin_ = pairingPin;
   trusted_ = preferences_.getString("peer", "").c_str();
   trustedType_ = preferences_.getUChar("type", 0);
   pairingUntil_ = millis() + window;
-  if (!NimBLEDevice::init(name)) return false;
+  if (!NimBLEDevice::init(boardId)) return false;
   if (forgetBond && !NimBLEDevice::deleteAllBonds()) return false;
   NimBLEDevice::setMTU(247);
   NimBLEDevice::setSecurityAuth(true, true, true);
@@ -36,7 +32,7 @@ bool Peripheral::begin(const char* name, bool forgetBond, uint32_t window) {
   auto* advertising = NimBLEDevice::getAdvertising();
   advertising->addServiceUUID(ServiceUuid);
   advertising->enableScanResponse(true);
-  advertising->setName(name);
+  advertising->setName(boardId);
   return advertising->start();
 }
 void Peripheral::onConnect(NimBLEServer* server, NimBLEConnInfo& info) {
@@ -150,9 +146,52 @@ bool Peripheral::poll() {
     NimBLEDevice::getAdvertising()->start();
   return channel_.takeLoss() || lost; // Also deliver faults detected by this poll immediately.
 }
-bool Peripheral::forgetBond() {
+bool Peripheral::paired() const {
+  std::lock_guard<std::mutex> lock(stateMutex_);
+  return !trusted_.empty();
+}
+
+bool Peripheral::openPairingWindow(uint32_t pairingWindowMs) {
+  {
+    std::lock_guard<std::mutex> lock(stateMutex_);
+    if (!trusted_.empty()) return false;
+    pairingUntil_ = millis() + pairingWindowMs;
+  }
+  auto* advertising = NimBLEDevice::getAdvertising();
+  return advertising->isAdvertising() || advertising->start();
+}
+
+bool Peripheral::forgetBond(uint32_t pairingWindowMs) {
+  uint16_t handle;
+  {
+    std::lock_guard<std::mutex> lock(stateMutex_);
+    handle = handle_;
+  }
   channel_.disconnect();
-  return NimBLEDevice::deleteAllBonds() && preferences_.clear();
+  auto* advertising = NimBLEDevice::getAdvertising();
+  // ble_gap_unpair returns EBUSY while advertising or discovery is active.
+  if (!advertising->stop()) return false;
+  if (server_ && handle != BLE_HS_CONN_HANDLE_NONE) server_->disconnect(handle);
+  if (!NimBLEDevice::deleteAllBonds()) {
+    advertising->start();
+    return false;
+  }
+  if (!preferences_.clear()) {
+    advertising->start();
+    return false;
+  }
+  {
+    std::lock_guard<std::mutex> lock(stateMutex_);
+    handle_ = BLE_HS_CONN_HANDLE_NONE;
+    authenticated_ = subscribed_ = savePeer_ = waiting_ = false;
+    acknowledgement_ = 0;
+    trusted_.clear();
+    candidate_.clear();
+    trustedType_ = candidateType_ = 0;
+    pairingUntil_ = millis() + pairingWindowMs;
+  }
+  status_->setValue("EDUBOX-BLE/1;ready=0");
+  return advertising->isAdvertising() || advertising->start();
 }
 }}
 #endif

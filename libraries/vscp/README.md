@@ -1,6 +1,6 @@
 # VSCP client/server library
 
-The library implements **Virtual Sensors Communication Protocol** API `1.6`. Library version: `2.2.2`.
+The library implements **Virtual Sensors Communication Protocol** API `1.7`. Library version: `2.3.0`.
 It is not the event-based Very Simple Control Protocol.
 
 ## Components
@@ -134,7 +134,7 @@ to implement application ownership policy per endpoint. Existing one-argument
 handlers remain supported. `server.closeSession(transport)` invalidates that
 endpoint and cancels its PING without sending a frame or invoking `onBye`.
 Use it for physical link loss; application hardware cleanup remains explicit.
-These additions do not change the API 1.6 wire format.
+These additions do not change the API 1.7 wire format.
 
 ```text
 ?type=BYE
@@ -156,3 +156,12 @@ observe a remote BYE with the affected `Transport&`. The callback fires once
 per closed session and is rearmed by successful INIT. These methods share the
 same single-owner execution requirements as poll and other transactions.
 Status-bearing BYE messages do not close a session.
+
+## Physical commissioning with PAIR
+
+`Client::pair(resetExisting)` sends `PAIR` before INIT and always includes a
+transaction `seq`. A successful application handler returns `board_id` and a
+six-digit `pin`. The server deliberately allows PAIR before INIT; applications
+must restrict it to an authorized physical transport. EduBox Board accepts it
+only on UART2. Existing pairing is reported as `already_paired`; replacement
+requires `reset=1`. The shared protocol library does not derive identities or PINs.

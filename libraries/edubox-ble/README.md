@@ -32,6 +32,12 @@ owns blocking GAP/GATT calls in a worker on core 0; only main loop owns VSCP/LVG
 Radio reconnect uses a saved authenticated identity and 1/2/4/8 s backoff; it does
 not restore INIT/devices or resend CONFIG/CONTROL.
 
+Central accepts an optional application `LogSink`. Level 2 (`Important`) reports
+worker/state, scan summary, pairing/authentication outcome, connect/disconnect and
+retry events. Level 3 (`Detail`) adds individual advertisements, addresses, GAP,
+GATT, MTU, channel-generation, bond-storage and cleanup steps. Commissioning PIN
+values and protocol payloads are never written by the BLE logger.
+
 Security build flags on BOTH C and C++:
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1, MYNEWT_VAL_BLE_SM_SC_ONLY=1,
 MYNEWT_VAL_BLE_SM_LEGACY=0. Runtime demands encryption, MITM authentication,
@@ -40,6 +46,14 @@ authentication; BLE addresses alone are not an authentication mechanism.
 Bonded-only reconnect never enters a substitute PIN or accepts numeric-comparison
 pairing. A missing bond requires explicit manual commissioning with the Board PIN;
 automatic connections also verify the resolved identity against the saved peer.
+
+Commissioning identity is supplied by the Board application. `Peripheral::begin`
+takes the exact printable Board ID and a six-digit PIN; the shared BLE library
+does not generate either value and does not contain the application HMAC key.
+The advertised name, physical label and Panel GUI must use the same Board ID.
+After authenticated bonding, Central persists both the BLE identity address and
+Board ID. `paired()`, `openPairingWindow()` and `forgetBond()` let the application
+enforce cable-authorized first pairing and explicit replacement.
 
 python libraries/edubox-ble/tests/run_tests.py runs framing and real VSCP-over-
 Channel integration at MTU 23. It does not test radio, NVS or physical outputs.

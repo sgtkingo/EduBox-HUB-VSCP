@@ -52,7 +52,10 @@ int main() {
   assert(client.update("A02").error == "Peer disconnected");
   assert(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(20));
   assert(client.sessionClosed() && !client.isInitialized());
-  assert(central.takeLoss() && central.open());
+  peripheral.disconnect(); // Simulate the radio loss on the other endpoint too.
+  assert(central.takeLoss() && peripheral.takeLoss());
+  assert(server.closeSession(incoming));
+  assert(central.open() && peripheral.open());
   assert(client.control("A02", {}).error == "Protocol not initialized");
   assert(controls == 2); // Physical reconnect alone never replays commands.
   run = false; worker.join();

@@ -1,6 +1,6 @@
 # VSCP Protocol
 
-Aktuální API verze: `1.6`. Verze knihovny VSCP: `2.2.2`.
+Aktuální API verze: `1.7`. Verze knihovny VSCP: `2.3.0`.
 
 **VSCP** (*Virtual Sensors Communication Protocol*) je jednoduchý textový protokol pro výměnu zpráv mezi řídicí aplikací a cílovým zařízením. Protokol je navržený pro scénáře, kde je potřeba číst hodnoty senzorů, nastavovat akční členy, konfigurovat zařízení a potvrzovat připojení k fyzickým nebo logickým pinům.
 
@@ -120,6 +120,7 @@ Typické role zařízení:
 | `RESET` | `?type=RESET&id=<uid>` | `?id=<uid>&status=1` | reset zařízení nebo jeho runtime stavu |
 | `PING` | `?type=PING&seq=<number>` | `?seq=<number>&status=1` | kontrola dostupnosti protistrany v obou směrech |
 | `BYE` | `?type=BYE[&seq=<number>]` | klientské BYE: `?seq=<number>&status=1` | ukončení relace; klient volí, zda na odpověď čeká |
+| `PAIR` | `?type=PAIR&seq=<číslo>[&reset=1]` | `?seq=<číslo>&status=1&board_id=<id>&pin=<pin>` | fyzické uvedení do provozu před INIT |
 
 ## 7. INIT
 
@@ -128,7 +129,7 @@ Typické role zařízení:
 Request:
 
 ```text
-?type=INIT&app=board&db=1.0&api=1.6
+?type=INIT&app=board&db=1.0&api=1.7
 ```
 
 Parametry:
@@ -333,7 +334,7 @@ Takové rozšíření by mělo být explicitně popsáno v aplikačním profilu.
 ### 14.1 Sensor example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.7
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=temp_sensor&pins=1
@@ -349,7 +350,7 @@ Device -> Controller: ?id=temp_sensor&status=1
 ### 14.2 Actuator example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.7
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=led_01&pins=3
@@ -365,7 +366,7 @@ Device -> Controller: ?id=led_01&status=1
 ### 14.3 Hybrid regulator example
 
 ```text
-Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.6
+Controller -> Device: ?type=INIT&app=board&db=1.0&api=1.7
 Device -> Controller: ?status=1
 
 Controller -> Device: ?type=CONNECT&id=heater_01&pins=3,5,6
@@ -452,7 +453,7 @@ Minimální implementace VSCP by měla podporovat:
 Minimální příklad:
 
 ```text
-?type=INIT&api=1.6
+?type=INIT&api=1.7
 ?status=1
 
 ?type=UPDATE&id=temp_sensor
@@ -527,4 +528,23 @@ nečekajícího zápisu se lokální relace nemění.
 `Client::sessionClosed()` dovoluje aplikaci zjistit ukončení relace.
 `Server::onBye(handler)` oznámí přijetí BYE a předá dotčený transport;
 duplicitní BYE nevyvolá další callback, dokud nový INIT neobnoví relaci.
+
+## 21. PAIR — fyzické uvedení do provozu
+
+`PAIR` přenáší párovací údaje před `INIT`. Vždy používá korelaci pomocí `seq`;
+`Client::pair()` přidá sekvenci i tehdy, když je sekvenování běžných transakcí
+vypnuté. Server povoluje PAIR před inicializací, ale autorizace konkrétního
+transportu zůstává politikou aplikace.
+
+```text
+Klient -> Server: ?type=PAIR&seq=1
+Server -> Klient: ?seq=1&status=1&board_id=EB-A4CF-129B73E8&pin=483271
+```
+
+Aplikace EduBox Board přijímá PAIR pouze přes fyzický UART. `board_id` je přesný
+text ze štítku i BLE advertising name; `pin` je šestimístný PIN ze stejného
+štítku. Existující bond vrátí `status=0&error=already_paired`. Explicitní
+nahrazení používá `?type=PAIR&seq=2&reset=1`; po smazání starého bondu vrátí
+stejná úspěšná pole. Odvození PINu a politika resetu nejsou součástí knihovny
+protokolu.
 Zprávy v opačném směru jsou zpracovávány přes poll i během čekání klienta.

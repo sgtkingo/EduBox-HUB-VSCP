@@ -1,7 +1,7 @@
-"""VSCP 1.6 / library 2.2.2 session framing for reactive server emulators."""
+"""VSCP 1.7 / library 2.3.0 session framing for reactive server emulators."""
 
-API_VERSION = "1.6"
-LIBRARY_VERSION = "2.2.2"
+API_VERSION = "1.7"
+LIBRARY_VERSION = "2.3.0"
 
 
 def ping_response(params):

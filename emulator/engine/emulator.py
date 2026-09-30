@@ -8,7 +8,7 @@ The wire format is a URL-like query string:
     ?type=UPDATE&id=S01
     ?id=S01&status=1&temp=24&humi=58
 
-Supported API 1.6 requests:
+Supported API 1.7 requests:
 INIT, UPDATE, CONFIG, CONTROL, RESET, CONNECT, DISCONNECT.
 """
 
@@ -592,7 +592,7 @@ class VSCPEmulator:
         listen_thread.start()
 
         try:
-            print("Emulator ready. Example: ?type=INIT&app=board&db=1.0&api=1.6")
+            print("Emulator ready. Example: ?type=INIT&app=board&db=1.0&api=1.7")
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:

@@ -13,7 +13,7 @@ python real_runner.py
 
 Then send commands like `?type=UPDATE&id=mic_001` to retrieve live values.
 
-## VSCP API 1.6 / library 2.2.2
+## VSCP API 1.7 / library 2.3.0
 
 Both basic and pattern emulators support session commands before INIT:
 

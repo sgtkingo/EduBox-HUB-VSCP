@@ -18,7 +18,8 @@ String Client::nextSequence() {
   return String(buffer);
 }
 
-ResponseStatus Client::transact(Command command, Parameters parameters, unsigned long timeoutOverrideMs) {
+ResponseStatus Client::transact(Command command, Parameters parameters, unsigned long timeoutOverrideMs,
+                                bool forceSequence) {
   ResponseStatus result;
   if (transacting_) { result.error = "Transaction already pending"; return result; }
   transacting_ = true;
@@ -28,7 +29,7 @@ ResponseStatus Client::transact(Command command, Parameters parameters, unsigned
   const String expectedId = expectedIdEntry == parameters.end() ? String() : expectedIdEntry->second;
 
   String expectedSequence;
-  if (sequenceEnabled_) {
+  if (sequenceEnabled_ || forceSequence) {
     expectedSequence = nextSequence();
     parameters["seq"] = expectedSequence;
   }
@@ -59,7 +60,7 @@ ResponseStatus Client::transact(Command command, Parameters parameters, unsigned
       result.error = parseError;
       return result;
     }
-    if (sequenceEnabled_) {
+    if (sequenceEnabled_ || forceSequence) {
       const auto seq = result.parameters.find("seq");
       if (seq == result.parameters.end() || seq->second != expectedSequence) {
         result = ResponseStatus(); // Late/unsequenced response is not this transaction.
@@ -183,6 +184,12 @@ ResponseStatus Client::control(const String& uid, const Parameters& parameters) 
 
 ResponseStatus Client::reset(const String& uid) {
   return transact(Command::Reset, Parameters{{"id", uid}});
+}
+
+ResponseStatus Client::pair(bool resetExisting) {
+  Parameters parameters;
+  if (resetExisting) parameters["reset"] = "1";
+  return transact(Command::Pair, parameters, DEFAULT_TIMEOUT_MS, true);
 }
 
 }  // namespace vscp

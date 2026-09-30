@@ -40,6 +40,7 @@ const char* commandName(Command command) {
     case Command::Reset: return "RESET";
     case Command::Ping: return "PING";
     case Command::Bye: return "BYE";
+    case Command::Pair: return "PAIR";
     case Command::Unknown: return "UNKNOWN";
   }
   return "UNKNOWN";
@@ -57,6 +58,7 @@ Command commandFromName(String name) {
   if (name == "RESET") return Command::Reset;
   if (name == "PING") return Command::Ping;
   if (name == "BYE") return Command::Bye;
+  if (name == "PAIR") return Command::Pair;
   return Command::Unknown;
 }
 

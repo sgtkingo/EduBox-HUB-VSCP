@@ -31,7 +31,8 @@ bool Server::closeSession(Transport& transport) {
 }
 
 Response Server::dispatch(Endpoint& endpoint, const Request& request) {
-  if (request.command != Command::Init && !endpoint.initialized) {
+  // PAIR is physical commissioning and must work before a protocol session.
+  if (request.command != Command::Init && request.command != Command::Pair && !endpoint.initialized) {
     return Response::fail("Protocol not initialized");
   }
 
