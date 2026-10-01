@@ -71,6 +71,15 @@ int main() {
 
   server.on(Command::Init, [](const Request&) { return Response::ok(); });
   assert(client.init().status == Status::Ok);
+  assert(!parse(clientWire.outgoing.back()).has("hold")); // Omitted means hold=1.
+  assert(client.init("", "", false).status == Status::Ok);
+  assert(parse(clientWire.outgoing.back()).value("hold") == "0");
+  assert(!server.ping(serverWire, 20)); // Server probes are disabled for this endpoint.
+  assert(client.ping().status == Status::Ok); // Client probes still work.
+  assert(client.init().status == Status::Ok); // A new INIT restores the default.
+  assert(server.ping(serverWire, 20));
+  client.poll(); server.poll();
+  assert(server.pingResult(serverWire).state == PingState::Ok);
   server.on(Command::Update, [&](const Request&) {
     assert(server.ping(serverWire, 20));
     Response response = Response::ok();

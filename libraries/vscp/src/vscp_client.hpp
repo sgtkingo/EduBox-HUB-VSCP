@@ -29,7 +29,9 @@ public:
   void setSequenceEnabled(bool enabled) { sequenceEnabled_ = enabled; }
   void setTimeout(unsigned long timeoutMs) { timeoutMs_ = timeoutMs; }
 
-  ResponseStatus init(const String& application = "", const String& databaseVersion = "");
+  // hold=false asks the server to stop initiating PINGs for this session.
+  ResponseStatus init(const String& application = "", const String& databaseVersion = "",
+                      bool hold = true);
   ResponseStatus connect(const String& uid, const String& pins);
   ResponseStatus disconnect(const String& uid);
   ResponseStatus update(const String& uid);

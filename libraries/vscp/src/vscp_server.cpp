@@ -24,6 +24,7 @@ bool Server::closeSession(Transport& transport) {
     if (endpoint.transport != &transport) continue;
     endpoint.initialized = false;
     endpoint.closed = true;
+    endpoint.hold = true;
     endpoint.ping.cancel();
     return true;
   }
@@ -44,7 +45,11 @@ Response Server::dispatch(Endpoint& endpoint, const Request& request) {
   Response response = handler->second(request, *endpoint.transport);
   if (request.command == Command::Init) {
     endpoint.initialized = response.status == Status::Ok;
-    if (endpoint.initialized) endpoint.closed = false;
+    if (endpoint.initialized) {
+      endpoint.closed = false;
+      endpoint.hold = request.value("hold") != "0";
+      if (!endpoint.hold) endpoint.ping.cancel();
+    }
   }
   return response;
 }
@@ -63,6 +68,7 @@ void Server::process(Endpoint& endpoint, const String& message) {
       const bool notify = !endpoint.closed;
       endpoint.initialized = false;
       endpoint.closed = true;
+      endpoint.hold = true;
       endpoint.ping.cancel();
       if (notify && byeHandler_) byeHandler_(*endpoint.transport);
       Response response = Response::ok();
@@ -90,6 +96,7 @@ bool Server::bye(Transport& transport) {
     if (!transport.writeLine(Codec::buildRequest(Command::Bye, {}))) return false;
     endpoint.initialized = false;
     endpoint.closed = true;
+    endpoint.hold = true;
     endpoint.ping.cancel();
     return true;
   }
@@ -98,7 +105,7 @@ bool Server::bye(Transport& transport) {
 
 bool Server::ping(Transport& transport, unsigned long timeoutMs) {
   for (auto& endpoint : endpoints_) {
-    if (endpoint.transport == &transport) return endpoint.ping.start(transport, timeoutMs);
+    if (endpoint.transport == &transport) return endpoint.hold && endpoint.ping.start(transport, timeoutMs);
   }
   return false;
 }

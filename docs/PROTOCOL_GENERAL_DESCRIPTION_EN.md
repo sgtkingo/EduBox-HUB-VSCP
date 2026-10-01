@@ -140,6 +140,13 @@ Parameters:
 | `app` | optional | application, profile, or catalog name |
 | `db` | optional | device catalog or data model version |
 | `api` | recommended | VSCP API version |
+| `hold` | optional | `1` (default) enables server-initiated PING; `0` disables it for this session |
+
+Append `&hold=0` to INIT when the client does not want server-initiated PING.
+The setting takes effect after a successful INIT and is reset by a later INIT
+without `hold=0`. Client-initiated PING remains available. On EduBox Board,
+`hold=0` also disables the inactivity lease; BYE and physical link loss still
+end the control session.
 
 Successful response:
 

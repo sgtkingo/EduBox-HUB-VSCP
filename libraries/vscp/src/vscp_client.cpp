@@ -146,11 +146,12 @@ ResponseStatus Client::ping() {
   return response;
 }
 
-ResponseStatus Client::init(const String& application, const String& databaseVersion) {
+ResponseStatus Client::init(const String& application, const String& databaseVersion, bool hold) {
   Parameters parameters;
   parameters["api"] = API_VERSION;
   if (detail::stringLength(application) > 0) parameters["app"] = application;
   if (detail::stringLength(databaseVersion) > 0) parameters["db"] = databaseVersion;
+  if (!hold) parameters["hold"] = "0";
   ResponseStatus response = transact(Command::Init, parameters);
   initialized_ = response.status == Status::Ok;
   if (initialized_) closed_ = false;

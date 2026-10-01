@@ -16,6 +16,12 @@ It is not the event-based Very Simple Control Protocol.
 
 Include all public components with `#include <vscp.hpp>`.
 
+`Client::init(app, db, false)` adds `hold=0` to INIT. Without this option the
+parameter is omitted and defaults to `hold=1`. A successful `hold=0` INIT
+disables server-initiated PING on that transport until the next successful INIT;
+client-initiated PING still works. The Board also disables its idle lease for
+this mode, so the client should send BYE when finished.
+
 Configuration defaults live in `src/config.hpp` and can be overridden with
 compiler definitions such as `-DMAX_PROTOCOL_REQUEST_SIZE=2048`.
 

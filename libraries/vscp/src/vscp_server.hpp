@@ -41,6 +41,7 @@ private:
     Transport* transport;
     bool initialized = false;
     bool closed = false;
+    bool hold = true;
     detail::PingExchange ping{true};
   };
 

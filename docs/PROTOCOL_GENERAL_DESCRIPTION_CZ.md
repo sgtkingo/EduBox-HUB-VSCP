@@ -140,6 +140,12 @@ Parametry:
 | `app` | volitelné | název aplikace, profilu nebo katalogu |
 | `db` | volitelné | verze katalogu zařízení nebo datového modelu |
 | `api` | doporučené | verze VSCP API |
+| `hold` | volitelné | `1` (výchozí) zapíná PING zahajovaný serverem; `0` jej pro relaci vypíná |
+
+Parametr `&hold=0` v INIT vypne PING zahajovaný serverem po úspěšném navázání
+relace. Další úspěšný INIT bez `hold=0` obnoví výchozí chování. PING zahajovaný
+klientem zůstává dostupný. EduBox Board v režimu `hold=0` vypne také časový
+dohled nečinnosti; BYE a fyzická ztráta spojení stále ukončují řídicí relaci.
 
 Úspěšná response:
 

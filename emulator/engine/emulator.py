@@ -202,6 +202,7 @@ class VSCPEmulator:
         self.strict_api = strict_api
 
         self.initialized = False
+        self.hold_enabled = True
         self.connected_sensors: Dict[str, list[int]] = {}
         self.sensor_configs: Dict[str, Dict[str, str]] = {}
         self.control_values: Dict[str, Dict[str, str]] = {}
@@ -289,7 +290,11 @@ class VSCPEmulator:
         app = params.get("app", "")
         db = params.get("db", "")
         api = params.get("api", "")
+        hold = params.get("hold", "1")
         print(f"INIT request: app={app or '-'} db={db or '-'} api={api or '-'}")
+
+        if hold not in ("0", "1"):
+            return self.build_message({"status": "0", "error": "Invalid hold: expected 0 or 1"})
 
         if self.strict_api and api and api != self.API_VERSION:
             return self.build_message({
@@ -301,6 +306,7 @@ class VSCPEmulator:
             print(f"DB version differs: HMI={db}, emulator={self.DB_VERSION}; accepting for emulator run")
 
         self.initialized = True
+        self.hold_enabled = hold == "1"
         return self.build_message({"status": "1"})
 
     @staticmethod
